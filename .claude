@@ -1,0 +1,407 @@
+# Suno Music Video Generator
+
+## Project Overview
+
+This is an automated pipeline for creating professional HD music videos from Suno AI-generated songs. The system takes timed SRT lyrics, the original Suno style prompt, and high-quality audio to generate perfectly synchronized visuals via AI (OpenAI DALL-E 3 or Grok), then assembles everything into YouTube-ready 1080p videos.
+
+## Core Concept
+
+The workflow leverages three key inputs:
+1. **SRT subtitle file** - Provides exact timing for each lyric line (each subtitle = one scene)
+2. **Suno style prompt** - The original prompt used to generate the song (extracts visual themes)
+3. **WAV audio file** - High-quality audio from Suno
+
+From these, the system:
+- Parses SRT to extract timing and lyrics
+- Analyzes Suno prompt to extract visual keywords (cosmic → space/stars, synthwave → neon/retro, etc.)
+- Generates AI image prompts that match the song's atmosphere
+- Creates images via API calls (OpenAI or Grok)
+- Assembles perfectly-timed HD video with FFmpeg
+- Outputs YouTube-ready video + SRT captions
+
+## Key Features
+
+- **Style Consistency**: Visual atmosphere automatically derived from Suno prompt
+- **Perfect Sync**: SRT timing ensures frame-perfect synchronization
+- **Suno Format Handling**: 
+  - Background vocals in (parentheses) are shown in captions but excluded from image prompts
+  - Structural markers like [Intro], [Instrumental] trigger abstract visuals
+- **Cost Effective**: ~$2-5 per song with OpenAI DALL-E 3
+- **Resume Capable**: Image generation can be interrupted and resumed
+- **YouTube Optimized**: 1920x1080, H.264, AAC 320kbps
+
+## Architecture
+
+### Pipeline Flow
+```
+SRT File + Suno Style + Audio
+    ↓
+srt_to_prompts.py (parses & generates prompts)
+    ↓
+prompts.json (timed prompts with visual style)
+    ↓
+generate_images.py (API calls to OpenAI/Grok)
+    ↓
+images/ directory (scene_001.jpg, scene_002.jpg, etc.)
+    ↓
+assemble_video.py (FFmpeg video creation)
+    ↓
+Final HD video + SRT captions
+```
+
+### Master Script
+`srt_pipeline.sh` orchestrates the entire workflow with interactive prompts and progress tracking.
+
+## Components
+
+### 1. srt_to_prompts.py
+**Purpose**: Parse SRT, extract Suno style elements, generate AI image prompts
+
+**Key Functions**:
+- `parse_srt()` - Extracts timing and text from SRT format
+- `load_suno_style()` - Reads Suno prompt file
+- `extract_style_elements()` - Maps genre/mood to visual keywords
+  - 20+ genre mappings (trance→cosmic, synthwave→neon, jazz→noir, etc.)
+  - Mood detection (uplifting, dark, dreamy, intense, etc.)
+- `generate_image_prompt()` - Creates prompts for each scene
+  - Removes background vocals in (parentheses)
+  - Handles [structural markers]
+  - Combines: base_style + visual_keywords + mood + lyric + technical_specs
+
+**Output**: JSON file with segments array containing:
+- sequence, start, end, duration
+- lyric (original), lyric_cleaned (prompt version)
+- prompt (complete AI image prompt)
+- filename (scene_XXX.jpg)
+
+### 2. generate_images.py
+**Purpose**: Generate images via OpenAI or Grok APIs
+
+**Features**:
+- Dual provider support (openai/grok)
+- API key from env vars or command line
+- Resume capability (skips existing files)
+- Rate limiting (2-second delays)
+- Progress tracking
+- Error handling per-image
+
+**API Specs**:
+- OpenAI: DALL-E 3, 1792x1024 (16:9), HD quality
+- Grok: xAI image generation (endpoint configurable)
+
+### 3. assemble_video.py
+**Purpose**: Create final HD video from timed images + audio
+
+**Process**:
+- Creates FFmpeg concat file with precise durations from SRT timing
+- Each image displays for exact duration specified in SRT
+- Scales/pads to 1920x1080 maintaining aspect ratio
+- H.264 codec, AAC audio at 320kbps
+- YouTube-optimized output
+
+**FFmpeg Command Structure**:
+```
+-f concat -safe 0 -i concat_file
+-i audio.wav
+-vf scale=1920:1080:force_original_aspect_ratio=decrease,pad=...
+-c:v libx264 -preset slow -crf 18
+-c:a aac -b:a 320k
+-shortest
+```
+
+### 4. srt_pipeline.sh
+**Purpose**: Master orchestration script
+
+**Workflow**:
+1. Validates inputs (SRT, audio, API key)
+2. Calls srt_to_prompts.py
+3. Interactive confirmation before API calls
+4. Calls generate_images.py
+5. Calls assemble_video.py
+6. Copies SRT for YouTube
+7. Reports file sizes, durations, locations
+
+**Parameters**:
+- SRT file, audio file, output name
+- API provider (openai/grok), API key
+- Optional: Suno style file, base style
+
+## Suno Format Handling
+
+### Background Vocals (Parentheses)
+Lyrics often contain background vocals: `"We are stardust (stardust, stardust)"`
+
+**Behavior**:
+- Kept in SRT file → displayed in YouTube captions
+- Removed from image prompts → cleaner visuals focused on main lyrics
+- Regex: `re.sub(r'\([^)]*\)', '', lyric)`
+
+### Structural Markers (Brackets)
+Examples: `[Intro]`, `[Instrumental]`, `[Bridge]`, `[Chorus]`
+
+**Behavior**:
+- Instrumental/structural: triggers "Abstract visual interpretation"
+- Mood markers like `[Emotional]`: adds "{mood} atmosphere" to prompt
+
+## Style Extraction Logic
+
+The `extract_style_elements()` function maps musical genres to visual keywords:
+
+```python
+genre_map = {
+    'trance': 'cosmic, transcendent, flowing',
+    'synthwave': 'retro-futuristic, neon, 80s aesthetic',
+    'cinematic': 'dramatic, movie-quality, epic',
+    'ambient': 'ethereal, atmospheric, dreamlike',
+    # ... 20+ mappings
+}
+```
+
+Mood keywords detected: dark, bright, moody, uplifting, melancholic, energetic, calm, intense, dreamy, powerful, gentle, dramatic
+
+These are automatically integrated into every image prompt for consistency.
+
+## Prompt Construction
+
+Final image prompts follow this structure:
+```
+{base_style} | {visual_keywords} | {mood} atmosphere | scene depicting: {cleaned_lyric} | 16:9 aspect ratio, high quality, cinematic composition
+```
+
+Example:
+```
+photorealistic, cinematic | cosmic, transcendent, flowing | uplifting atmosphere | scene depicting: We are made of star stuff | 16:9 aspect ratio, high quality, cinematic composition
+```
+
+## Usage Examples
+
+### Complete Workflow
+```bash
+./srt_pipeline.sh \
+    mysong.srt \
+    mysong.wav \
+    "My_Song" \
+    openai \
+    $OPENAI_API_KEY \
+    suno_prompt.txt \
+    "cinematic"
+```
+
+### Individual Steps
+```bash
+# Generate prompts
+./srt_to_prompts.py lyrics.srt prompts.json suno_style.txt "photorealistic"
+
+# Generate images
+./generate_images.py prompts.json ./images openai $OPENAI_API_KEY
+
+# Assemble video
+./assemble_video.py prompts.json ./images audio.wav output_HD.mp4
+```
+
+## Cost & Performance
+
+### OpenAI DALL-E 3
+- Cost: ~$0.080 per image
+- 3-min song (5s/scene): 36 images = $2.88
+- 4-min song (4s/scene): 60 images = $4.80
+- Generation time: ~2-3 min per image
+
+### Timeline
+- SRT creation: 15-30 min (manual)
+- Prompt generation: < 1 second
+- Image generation: 2-3 min × number of scenes
+- Video assembly: 30-60 seconds
+- Total: ~30-60 min per song
+
+## Technical Specs
+
+### Output Video
+- Resolution: 1920x1080 (Full HD)
+- Codec: H.264 (libx264)
+- Audio: AAC 320kbps
+- Frame Rate: 25 fps
+- Aspect Ratio: 16:9
+- Format: MP4
+
+### Generated Images
+- Resolution: 1792x1024 (16:9)
+- Format: JPG
+- Quality: HD/high quality mode
+
+## Dependencies
+
+### Required
+- Python 3.7+
+- FFmpeg (video processing)
+- pip: `requests` library
+
+### Optional
+- Aegisub or Subtitle Edit (for creating SRT files)
+
+## API Configuration
+
+### Environment Variables (Recommended)
+```bash
+export OPENAI_API_KEY="sk-xxxxx"
+export XAI_API_KEY="xai-xxxxx"
+```
+
+### Rate Limits
+- OpenAI: Tier-dependent
+- Script includes 2-second delays between requests
+- Resume capability if interrupted
+
+## File Structure
+
+### Input Files
+```
+project/
+├── lyrics.srt              # Timed lyrics with Suno formatting
+├── audio.wav               # High-quality audio from Suno
+└── suno_prompt.txt         # Original Suno generation prompt
+```
+
+### Output Files
+```
+project/
+├── Song_Name_prompts.json  # Generated prompts with timing
+├── Song_Name_images/       # Generated images (scene_XXX.jpg)
+├── Song_Name_HD.mp4        # Final 1080p video
+└── Song_Name.srt           # Copy for YouTube upload
+```
+
+## Customization Points
+
+### 1. Prompt Generation Logic
+Edit `generate_image_prompt()` in `srt_to_prompts.py`:
+- Modify how genres map to visuals
+- Add custom mood detection
+- Adjust prompt structure
+- Add lyric-specific keywords (e.g., "love" → romantic lighting)
+
+### 2. Visual Style
+Edit `genre_map` dictionary to add/modify visual themes:
+```python
+'mygenre': 'custom, visual, keywords'
+```
+
+### 3. API Endpoints
+Edit `generate_images.py` to:
+- Add new providers
+- Modify image resolution/quality
+- Adjust timeout values
+- Change model selection
+
+### 4. Video Assembly
+Edit `assemble_video.py` to:
+- Add transitions/effects
+- Modify encoding parameters
+- Change resolution/bitrate
+- Add watermarks/overlays
+
+## Troubleshooting
+
+### Common Issues
+
+**API Errors**
+- Verify API key validity
+- Check billing/credits
+- Review rate limits
+- Resume with same command (skips existing images)
+
+**Sync Issues**
+- Validate SRT format with Aegisub
+- Check timestamps don't overlap
+- Ensure audio duration matches SRT total duration
+
+**Image Quality**
+- Adjust base_style parameter
+- Edit prompts.json before image generation
+- Add more descriptive keywords to Suno style file
+
+**Missing Images**
+- Re-run generate_images.py (auto-resumes)
+- Check API response errors in output
+- Manually remove failed scenes from JSON
+
+## Development Notes
+
+### Code Style
+- Python: PEP 8 compliant
+- Shell: POSIX-compatible bash
+- Comments explain "why" not "what"
+- Error handling with clear messages
+
+### Testing Strategy
+- Test with 3-5 images before full song
+- Validate SRT parsing with edge cases
+- Test API error recovery
+- Verify video/audio sync manually
+
+### Extension Ideas
+- Support for video clips instead of static images
+- Transition effects between scenes
+- Lyric overlay on video
+- Multiple visual styles per song
+- Batch processing queue system
+- Web UI for configuration
+
+## Git Repository Structure
+
+```
+suno-video-generator/
+├── .claude                    # This file
+├── README.md                  # User documentation
+├── srt_pipeline.sh           # Master script
+├── srt_to_prompts.py         # Prompt generator
+├── generate_images.py        # Image generator
+├── assemble_video.py         # Video assembler
+├── example_song.srt          # Example SRT
+├── example_suno_style.txt    # Example Suno prompt
+└── .gitignore                # Exclude API keys, outputs
+```
+
+## Security Notes
+
+- Never commit API keys to git
+- Use environment variables for credentials
+- Add `*_prompts.json`, `*_images/`, `*.mp4` to .gitignore
+- API keys passed via command line or env vars only
+
+## License
+
+MIT License - Free for personal and commercial use
+
+## Support & Contribution
+
+This tool is designed to be forked and customized. Common enhancements:
+- Additional API providers
+- Enhanced prompt engineering
+- Video transition effects
+- Real-time preview
+- Cloud deployment
+
+---
+
+**Quick Start for Claude Code**:
+```bash
+# Make scripts executable
+chmod +x *.sh *.py
+
+# Set API key
+export OPENAI_API_KEY="sk-xxxxx"
+
+# Run example
+./srt_pipeline.sh example_song.srt audio.wav "Test" openai
+```
+
+**Key Files to Understand First**:
+1. README.md - User-facing documentation
+2. srt_to_prompts.py - Core prompt generation logic
+3. srt_pipeline.sh - Workflow orchestration
+
+**When Making Changes**:
+- Test with short example SRT first (3-5 scenes)
+- Validate JSON output structure before image generation
+- Always verify video sync after assembly changes

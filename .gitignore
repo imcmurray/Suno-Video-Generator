@@ -1,0 +1,64 @@
+# API Keys and Secrets
+*.key
+.env
+.env.*
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# Build outputs
+dist/
+build/
+.remotion/
+
+# Server outputs and uploads
+server/outputs/
+server/uploads/
+
+# Generated Files
+*_prompts.json
+*_images/
+*_HD.mp4
+*.mp4
+*.mov
+*.wav
+*.srt
+!example_song.srt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# OS Files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# Temporary Files
+/tmp/
+*.tmp
+*.bak
+
+# FFmpeg temp files
+/tmp/ffmpeg_*
+ffmpeg2pass-*.log
+
+# Test outputs
+test_*/
+debug_*/

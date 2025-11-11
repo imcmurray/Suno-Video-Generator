@@ -1,0 +1,63 @@
+{
+  "name": "suno-video-generator",
+  "version": "1.0.0",
+  "description": "Automated pipeline for creating professional HD music videos from Suno AI-generated songs",
+  "scripts": {
+    "dev": "remotion studio",
+    "web": "vite",
+    "server": "tsx watch server/index.ts",
+    "build": "remotion render",
+    "build:web": "vite build",
+    "upgrade": "remotion upgrade",
+    "preview": "remotion preview"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-label": "^2.1.8",
+    "@radix-ui/react-progress": "^1.1.8",
+    "@radix-ui/react-select": "^2.2.6",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "@remotion/bundler": "^4.0.373",
+    "@remotion/cli": "^4.0.234",
+    "@remotion/player": "^4.0.234",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "file-saver": "^2.0.5",
+    "jszip": "^3.10.1",
+    "lucide-react": "^0.553.0",
+    "multer": "^2.0.2",
+    "openai": "^4.73.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "^4.0.234",
+    "tailwind-merge": "^3.4.0",
+    "uuid": "^13.0.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/typography": "^0.5.15",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.5",
+    "@types/file-saver": "^2.0.7",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^22.9.0",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "prettier": "^3.3.3",
+    "prettier-plugin-tailwindcss": "^0.6.8",
+    "tailwindcss": "^3.4.14",
+    "tsx": "^4.20.6",
+    "typescript": "^5.6.3",
+    "vite": "^7.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
