@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { ProjectProvider } from "./lib/project-context";
 import { ThemeProvider } from "./lib/theme-context";
 import { ProjectSetup } from "./components/ProjectSetup";
+import { SceneGroupingEditor } from "./components/SceneGroupingEditor";
 import { PromptEditor } from "./components/PromptEditor";
 import { ImageGeneration } from "./components/ImageGeneration";
 import { VideoPreview } from "./components/VideoPreview";
@@ -9,7 +10,7 @@ import { ThemeToggle } from "./components/ThemeToggle";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import "./styles/globals.css";
 
-type AppStep = "setup" | "edit" | "generate" | "preview";
+type AppStep = "setup" | "grouping" | "edit" | "generate" | "preview";
 
 const App: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<AppStep>("setup");
@@ -17,7 +18,14 @@ const App: React.FC = () => {
   const renderStep = () => {
     switch (currentStep) {
       case "setup":
-        return <ProjectSetup onComplete={() => setCurrentStep("edit")} />;
+        return <ProjectSetup onComplete={() => setCurrentStep("grouping")} />;
+      case "grouping":
+        return (
+          <SceneGroupingEditor
+            onNext={() => setCurrentStep("edit")}
+            onBack={() => setCurrentStep("setup")}
+          />
+        );
       case "edit":
         return <PromptEditor onNext={() => setCurrentStep("generate")} />;
       case "generate":
@@ -25,12 +33,12 @@ const App: React.FC = () => {
       case "preview":
         return <VideoPreview />;
       default:
-        return <ProjectSetup onComplete={() => setCurrentStep("edit")} />;
+        return <ProjectSetup onComplete={() => setCurrentStep("grouping")} />;
     }
   };
 
   const getStepNumber = (step: AppStep): number => {
-    const steps: AppStep[] = ["setup", "edit", "generate", "preview"];
+    const steps: AppStep[] = ["setup", "grouping", "edit", "generate", "preview"];
     return steps.indexOf(step) + 1;
   };
 
@@ -58,17 +66,21 @@ const App: React.FC = () => {
                       <span className="hidden sm:inline">1. Setup</span>
                       <span className="sm:hidden">1</span>
                     </TabsTrigger>
-                    <TabsTrigger value="edit">
-                      <span className="hidden sm:inline">2. Edit Prompts</span>
+                    <TabsTrigger value="grouping">
+                      <span className="hidden sm:inline">2. Scene Grouping</span>
                       <span className="sm:hidden">2</span>
                     </TabsTrigger>
-                    <TabsTrigger value="generate">
-                      <span className="hidden sm:inline">3. Generate Images</span>
+                    <TabsTrigger value="edit">
+                      <span className="hidden sm:inline">3. Edit Prompts</span>
                       <span className="sm:hidden">3</span>
                     </TabsTrigger>
-                    <TabsTrigger value="preview">
-                      <span className="hidden sm:inline">4. Preview & Render</span>
+                    <TabsTrigger value="generate">
+                      <span className="hidden sm:inline">4. Generate Images</span>
                       <span className="sm:hidden">4</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="preview">
+                      <span className="hidden sm:inline">5. Preview & Render</span>
+                      <span className="sm:hidden">5</span>
                     </TabsTrigger>
                   </TabsList>
                 </Tabs>
