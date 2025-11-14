@@ -72,7 +72,12 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
       const next = new Map(prev);
       const current = next.get(id);
       if (current) {
-        next.set(id, { ...current, ...updates });
+        const updated = { ...current, ...updates };
+        next.set(id, updated);
+        console.log('Updated status for:', id, 'New status:', updated.status, 'Error:', updated.error);
+        console.log('Map size after update:', next.size);
+      } else {
+        console.warn('Tried to update status for non-existent id:', id);
       }
       return next;
     });
@@ -401,6 +406,16 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
   const remainingToGenerate = uniqueItems - completedCount - reusedCount;
   const progressPercent = (completedCount / uniqueItems) * 100;
 
+  // Debug logging for stats
+  console.log('Stats calculation:', {
+    totalStatuses: allStatuses.length,
+    uniqueItems,
+    completedCount,
+    failedCount,
+    reusedCount,
+    failedItems: allStatuses.filter((s) => s.status === "failed").map(s => ({ id: s.id, error: s.error }))
+  });
+
   const estimatedCost = estimateCost(
     remainingToGenerate,
     project.apiProvider || "openai",
@@ -459,7 +474,9 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Failed</p>
-              <p className="text-2xl font-bold text-red-600">{failedCount}</p>
+              <p className="text-2xl font-bold text-red-600" title={`${failedCount} items failed`}>
+                {failedCount} {failedCount > 0 && '⚠️'}
+              </p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Remaining Cost</p>
@@ -502,7 +519,10 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
             if (!status) return null;
 
             return (
-              <Card key={group.id} className={status.status === "failed" ? "border-red-500" : ""}>
+              <Card
+                key={`${group.id}-${status.status}-${status.error ? 'error' : 'ok'}`}
+                className={status.status === "failed" ? "border-red-500 border-2" : ""}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
                     <div className="flex-shrink-0">
@@ -638,7 +658,10 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
             if (!status) return null;
 
             return (
-              <Card key={scene.sequence} className={status.status === "failed" ? "border-red-500" : ""}>
+              <Card
+                key={`${scene.sequence}-${status.status}-${status.error ? 'error' : 'ok'}`}
+                className={status.status === "failed" ? "border-red-500 border-2" : ""}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
                     <div className="flex-shrink-0">
