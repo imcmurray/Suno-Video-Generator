@@ -529,7 +529,6 @@ export async function exportImageToFolder(
   return {
     success: true,
     filename,
-    error: "Image opened in new tab - right-click and select 'Save Image As...'"
   };
 }
 
