@@ -29,6 +29,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
   // Modal and editing state
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedGroupForModal, setSelectedGroupForModal] = useState<SceneGroup | null>(null);
+  const [selectedGroupImageUrl, setSelectedGroupImageUrl] = useState<string>("");
   const [editingPromptGroupId, setEditingPromptGroupId] = useState<string | null>(null);
   const [editedPrompt, setEditedPrompt] = useState<string>("");
   const [isDragging, setIsDragging] = useState<string | null>(null); // Track which group is being dragged over
@@ -412,21 +413,22 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
 
   // Handle exporting image for manual upload to Grok UI
   const handleExportImage = async (groupId: string) => {
-    const group = project?.sceneGroups?.find(g => g.id === groupId);
+    const status = statuses.get(groupId);
+    const imageUrl = status?.imageUrl;
 
     console.log('handleExportImage called for group:', groupId);
-    console.log('Group found:', group);
-    console.log('Group imagePath:', group?.imagePath);
+    console.log('Status:', status);
+    console.log('Image URL from status:', imageUrl);
 
-    if (!group || !group.imagePath) {
-      console.error('Cannot export: group or imagePath is missing');
-      alert('Cannot export: image path is missing');
+    if (!imageUrl) {
+      console.error('Cannot export: image URL not found in status');
+      alert('Cannot export: image not generated yet');
       return;
     }
 
     try {
-      console.log('Calling exportImageToFolder with:', group.imagePath);
-      const result = await exportImageToFolder(group.imagePath, groupId);
+      console.log('Calling exportImageToFolder with:', imageUrl);
+      const result = await exportImageToFolder(imageUrl, groupId);
       console.log('Export result:', result);
 
       if (result.success) {
@@ -629,21 +631,29 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
   const handleOpenModal = (groupId: string) => {
     console.log('handleOpenModal called for group:', groupId);
     const group = project?.sceneGroups?.find(g => g.id === groupId);
-    console.log('Group found for modal:', group);
-    console.log('Group imagePath:', group?.imagePath);
+    const status = statuses.get(groupId);
+    const imageUrl = status?.imageUrl;
 
-    if (group) {
+    console.log('Group found for modal:', group);
+    console.log('Status:', status);
+    console.log('Image URL from status:', imageUrl);
+
+    if (group && imageUrl) {
       setSelectedGroupForModal(group);
+      setSelectedGroupImageUrl(imageUrl);
       setModalOpen(true);
-      console.log('Modal opened');
+      console.log('Modal opened with imageUrl:', imageUrl);
     } else {
-      console.error('Cannot open modal: group not found');
+      console.error('Cannot open modal: group or imageUrl not found');
+      if (!group) console.error('  - Group not found');
+      if (!imageUrl) console.error('  - Image URL not found in status');
     }
   };
 
   const handleCloseModal = () => {
     setModalOpen(false);
     setSelectedGroupForModal(null);
+    setSelectedGroupImageUrl("");
   };
 
   const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>, groupId: string) => {
@@ -1090,7 +1100,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
         <ImageModal
           isOpen={modalOpen}
           onClose={handleCloseModal}
-          imageUrl={selectedGroupForModal.imagePath || ""}
+          imageUrl={selectedGroupImageUrl}
           prompt={selectedGroupForModal.prompt}
           groupId={selectedGroupForModal.id}
           onExport={handleExportImage}
