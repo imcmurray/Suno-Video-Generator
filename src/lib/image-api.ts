@@ -522,27 +522,15 @@ export async function exportImageToFolder(
     console.log('Canvas method failed:', canvasError);
   }
 
-  // Method 3: Fallback - try to download via direct link (may be blocked by browser)
-  try {
-    const a = document.createElement("a");
-    a.href = imageUrl;
-    a.download = filename;
-    a.target = "_blank";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  // Method 3: Open image in new tab (best fallback for CORS-protected images)
+  // User can then right-click and Save As from the new tab
+  window.open(imageUrl, '_blank');
 
-    return {
-      success: true,
-      filename,
-      error: "Download initiated - if it doesn't work, right-click the image and 'Save As...'"
-    };
-  } catch (directError) {
-    return {
-      success: false,
-      error: "Cannot download due to CORS restrictions. Please right-click the image in the preview modal and select 'Save Image As...'"
-    };
-  }
+  return {
+    success: true,
+    filename,
+    error: "Image opened in new tab - right-click and select 'Save Image As...'"
+  };
 }
 
 /**
