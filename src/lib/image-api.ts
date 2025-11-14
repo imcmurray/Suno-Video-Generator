@@ -426,3 +426,122 @@ export function estimateCost(
 
   return sceneCount * costs[provider][quality];
 }
+
+/**
+ * Export image to the exports folder for manual upload to Grok UI
+ * In a browser environment, this triggers a download with a specific filename
+ */
+export async function exportImageToFolder(
+  imageUrl: string,
+  groupId: string
+): Promise<{ success: boolean; filename?: string; error?: string }> {
+  try {
+    const timestamp = Date.now();
+    const filename = `group-${groupId}-${timestamp}.jpg`;
+
+    // Fetch the image
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.statusText}`);
+    }
+
+    const blob = await response.blob();
+
+    // Trigger browser download
+    const downloadUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = downloadUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(downloadUrl);
+
+    return {
+      success: true,
+      filename,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Detect video quality (SD or HD) from video file properties
+ * Checks resolution first, falls back to file size
+ */
+export async function detectVideoQuality(
+  file: File
+): Promise<"SD" | "HD"> {
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    const url = URL.createObjectURL(file);
+
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(url);
+
+      // Check resolution (height)
+      // SD: 720p or lower, HD: 1080p or higher
+      if (video.videoHeight >= 1080) {
+        resolve("HD");
+      } else if (video.videoHeight > 0) {
+        resolve("SD");
+      } else {
+        // Fallback to file size if resolution unavailable
+        // SD: < 50MB, HD: >= 50MB
+        const sizeMB = file.size / (1024 * 1024);
+        resolve(sizeMB >= 50 ? "HD" : "SD");
+      }
+    };
+
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      // Fallback to file size on error
+      const sizeMB = file.size / (1024 * 1024);
+      resolve(sizeMB >= 50 ? "HD" : "SD");
+    };
+
+    video.src = url;
+  });
+}
+
+/**
+ * Import video file and prepare it for use in the app
+ * Returns blob URL and detected quality
+ */
+export async function importVideo(
+  file: File
+): Promise<{ success: boolean; videoUrl?: string; quality?: "SD" | "HD"; error?: string }> {
+  try {
+    // Validate file type
+    if (!file.type.startsWith("video/")) {
+      throw new Error("File is not a video");
+    }
+
+    // Detect quality
+    const quality = await detectVideoQuality(file);
+
+    // Create blob URL
+    const videoUrl = URL.createObjectURL(file);
+
+    return {
+      success: true,
+      videoUrl,
+      quality,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+// TODO: Replace convertImageToVideo with Grok video API when available
+// Expected endpoint: https://api.x.ai/v1/video/generations
+// Expected model: grok-2-vision-video (or similar)
+// This function currently uses a non-existent API endpoint
+// User workflow: Generate image -> Export -> Upload to Grok UI -> Import video back

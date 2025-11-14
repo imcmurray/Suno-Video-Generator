@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Image as ImageIcon, CheckCircle2, XCircle, Loader2, Play, Pause, Link2, Video as VideoIcon, RefreshCw } from "lucide-react";
+import { Image as ImageIcon, CheckCircle2, XCircle, Loader2, Play, Pause, Link2, Video as VideoIcon, RefreshCw, Download, Upload, Edit3 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Progress } from "./ui/progress";
 import { useProject } from "../lib/project-context";
-import { generateImage, estimateCost, convertImageToVideo } from "../lib/image-api";
+import { generateImage, estimateCost, convertImageToVideo, exportImageToFolder, importVideo } from "../lib/image-api";
 import { SceneData, SceneGroup, MediaVersion } from "../types";
 import { v4 as uuidv4 } from 'uuid';
+import { ImageModal } from "./ImageModal";
 
 interface GenerationStatus {
   id: string; // scene sequence or group ID
@@ -24,6 +25,13 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
   const [isPaused, setIsPaused] = useState(false);
   const isPausedRef = useRef(false); // Use ref for real-time checking in async loop
   const [statuses, setStatuses] = useState<Map<string, GenerationStatus>>(new Map());
+
+  // Modal and editing state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedGroupForModal, setSelectedGroupForModal] = useState<SceneGroup | null>(null);
+  const [editingPromptGroupId, setEditingPromptGroupId] = useState<string | null>(null);
+  const [editedPrompt, setEditedPrompt] = useState<string>("");
+  const [isDragging, setIsDragging] = useState<string | null>(null); // Track which group is being dragged over
 
   const usingGrouping = project?.useGrouping && project?.sceneGroups && project?.lyricLines;
 
@@ -402,6 +410,229 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
     }
   };
 
+  // Handle exporting image for manual upload to Grok UI
+  const handleExportImage = async (groupId: string) => {
+    const group = project?.sceneGroups?.find(g => g.id === groupId);
+    if (!group || !group.imagePath) return;
+
+    try {
+      const result = await exportImageToFolder(group.imagePath, groupId);
+
+      if (result.success) {
+        // Mark the current media version as exported
+        if (project && project.sceneGroups) {
+          const updatedGroups = project.sceneGroups.map((g) => {
+            if (g.id === groupId && g.mediaVersions && g.activeMediaId) {
+              const updatedVersions = g.mediaVersions.map((v) => {
+                if (v.id === g.activeMediaId) {
+                  return { ...v, exported: true };
+                }
+                return v;
+              });
+              return { ...g, mediaVersions: updatedVersions };
+            }
+            return g;
+          });
+
+          setProject({
+            ...project,
+            sceneGroups: updatedGroups,
+          });
+        }
+
+        alert(`Image exported successfully as ${result.filename}`);
+      } else {
+        alert(`Export failed: ${result.error}`);
+      }
+    } catch (error) {
+      alert(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  // Handle importing video file
+  const handleImportVideo = async (groupId: string, file: File) => {
+    if (!project || !project.sceneGroups) return;
+
+    try {
+      const result = await importVideo(file);
+
+      if (result.success && result.videoUrl && result.quality) {
+        // Count existing videos to generate label
+        const group = project.sceneGroups.find(g => g.id === groupId);
+        const videoCount = group?.mediaVersions?.filter(v => v.type === 'video').length || 0;
+
+        const qualityLabel = result.quality === 'HD' ? 'HD Video' : 'SD Video';
+        const label = videoCount === 0 ? qualityLabel : `${qualityLabel} v${videoCount + 1}`;
+
+        // Create new media version with quality
+        const newVersion: MediaVersion = {
+          id: uuidv4(),
+          type: 'video',
+          path: result.videoUrl,
+          createdAt: Date.now(),
+          label,
+          quality: result.quality,
+        };
+
+        const updatedGroups = project.sceneGroups.map((g) => {
+          if (g.id === groupId) {
+            const existingVersions = g.mediaVersions || [];
+            const updatedVersions = [...existingVersions, newVersion];
+
+            return {
+              ...g,
+              mediaVersions: updatedVersions,
+              activeMediaId: newVersion.id,
+              imagePath: result.videoUrl,
+            };
+          }
+          return g;
+        });
+
+        setProject({
+          ...project,
+          sceneGroups: updatedGroups,
+        });
+
+        updateStatus(groupId, {
+          imageUrl: result.videoUrl,
+          hasVideo: true,
+        });
+
+        alert(`${result.quality} video imported successfully!`);
+      } else {
+        alert(`Import failed: ${result.error}`);
+      }
+    } catch (error) {
+      alert(`Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  // Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent, groupId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(groupId);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, groupId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(null);
+
+    const files = Array.from(e.dataTransfer.files);
+    const videoFile = files.find(f => f.type.startsWith('video/'));
+
+    if (videoFile) {
+      await handleImportVideo(groupId, videoFile);
+    } else {
+      alert('Please drop a video file');
+    }
+  };
+
+  // Prompt editing handlers
+  const handleEditPrompt = (groupId: string) => {
+    const group = project?.sceneGroups?.find(g => g.id === groupId);
+    if (group) {
+      setEditingPromptGroupId(groupId);
+      setEditedPrompt(group.prompt);
+    }
+  };
+
+  const handleSavePrompt = async (groupId: string) => {
+    if (!project || !project.sceneGroups || !editedPrompt.trim()) return;
+
+    // Update the prompt in the group
+    const updatedGroups = project.sceneGroups.map((g) => {
+      if (g.id === groupId) {
+        return { ...g, prompt: editedPrompt };
+      }
+      return g;
+    });
+
+    setProject({
+      ...project,
+      sceneGroups: updatedGroups,
+    });
+
+    // Cancel edit mode
+    setEditingPromptGroupId(null);
+    setEditedPrompt("");
+
+    // Regenerate image with new prompt
+    if (!project.apiProvider || !project.apiKey) return;
+
+    updateStatus(groupId, { status: "generating" });
+
+    try {
+      const result = await generateImage({
+        prompt: editedPrompt,
+        provider: project.apiProvider,
+        apiKey: project.apiKey,
+        size: "1792x1024",
+        quality: "hd",
+      });
+
+      if (result.success && (result.imageData || result.imageUrl)) {
+        const imageUrl = result.imageUrl || URL.createObjectURL(result.imageData!);
+
+        // Add as a new variation (not replacing original)
+        const group = updatedGroups.find(g => g.id === groupId);
+        const imageCount = group?.mediaVersions?.filter(v => v.type === 'image').length || 0;
+        const label = imageCount === 0 ? 'Original Image' : `Image v${imageCount + 1}`;
+
+        addMediaVersion(groupId, imageUrl, 'image', label);
+
+        updateStatus(groupId, {
+          status: "completed",
+          imageUrl,
+        });
+      } else {
+        throw new Error(result.error || "Image generation failed");
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      updateStatus(groupId, {
+        status: "failed",
+        error: errorMessage,
+      });
+    }
+  };
+
+  const handleCancelEditPrompt = () => {
+    setEditingPromptGroupId(null);
+    setEditedPrompt("");
+  };
+
+  // Modal handlers
+  const handleOpenModal = (groupId: string) => {
+    const group = project?.sceneGroups?.find(g => g.id === groupId);
+    if (group) {
+      setSelectedGroupForModal(group);
+      setModalOpen(true);
+    }
+  };
+
+  const handleCloseModal = () => {
+    setModalOpen(false);
+    setSelectedGroupForModal(null);
+  };
+
+  const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>, groupId: string) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('video/')) {
+      await handleImportVideo(groupId, file);
+    }
+    // Reset input
+    e.target.value = '';
+  };
+
   if (!project) return null;
 
   // Calculate stats
@@ -526,12 +757,28 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
             const status = statuses.get(group.id);
             if (!status) return null;
 
+            const isEditing = editingPromptGroupId === group.id;
+            const isDraggingOverThis = isDragging === group.id;
+            const activeVersion = group.mediaVersions?.find(v => v.id === group.activeMediaId);
+            const isExported = activeVersion?.exported || false;
+
             return (
               <Card
                 key={`${group.id}-${status.status}-${status.error ? 'error' : 'ok'}`}
-                className={status.status === "failed" ? "border-red-500 border-2" : ""}
+                className={`${status.status === "failed" ? "border-red-500 border-2" : ""} ${isDraggingOverThis ? "border-blue-500 border-2 bg-blue-50" : ""}`}
+                onDragOver={(e) => handleDragOver(e, group.id)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, group.id)}
               >
                 <CardContent className="p-4">
+                  {isDraggingOverThis && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-blue-500/10 backdrop-blur-sm rounded-lg z-10">
+                      <div className="text-blue-700 font-semibold flex items-center gap-2">
+                        <Upload size={24} />
+                        Drop video here
+                      </div>
+                    </div>
+                  )}
                   <div className="flex items-start gap-3">
                     <div className="flex-shrink-0">
                       {status.status === "completed" && (
@@ -563,10 +810,44 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
                             Converting...
                           </div>
                         )}
+                        {isExported && (
+                          <div className="text-xs bg-green-500/20 text-green-700 px-1.5 py-0.5 rounded">
+                            Exported ✓
+                          </div>
+                        )}
                       </div>
                       <p className="text-xs text-muted-foreground truncate">
                         {group.combinedLyrics}
                       </p>
+
+                      {/* Prompt Editing */}
+                      {isEditing ? (
+                        <div className="mt-2 space-y-2">
+                          <textarea
+                            value={editedPrompt}
+                            onChange={(e) => setEditedPrompt(e.target.value)}
+                            className="w-full text-xs p-2 border rounded resize-none"
+                            rows={3}
+                            placeholder="Edit prompt..."
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleSavePrompt(group.id)}
+                              disabled={!editedPrompt.trim()}
+                            >
+                              Save & Regenerate
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={handleCancelEditPrompt}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
                       {status.error && (
                         <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded">
                           <p className="text-xs text-red-700 font-medium break-words">{status.error}</p>
@@ -574,9 +855,12 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
                       )}
 
                       {/* Media Preview */}
-                      {status.imageUrl && (
+                      {status.imageUrl && !isEditing && (
                         <div className="mt-2 space-y-2">
-                          <div className="relative w-full h-20 rounded overflow-hidden border">
+                          <div
+                            className="relative w-full h-20 rounded overflow-hidden border cursor-pointer hover:opacity-90 transition-opacity"
+                            onClick={() => !isVideoFile(status.imageUrl!) && handleOpenModal(group.id)}
+                          >
                             {isVideoFile(status.imageUrl) ? (
                               <video
                                 src={status.imageUrl}
@@ -593,12 +877,63 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
                                 className="w-full h-full object-cover"
                               />
                             )}
-                            {isVideoFile(status.imageUrl) && (
+                            {isVideoFile(status.imageUrl) && activeVersion?.quality && (
                               <div className="absolute top-1 right-1 bg-purple-600 text-white px-1.5 py-0.5 rounded text-xs font-semibold">
-                                VIDEO
+                                {activeVersion.quality} VIDEO
+                              </div>
+                            )}
+                            {!isVideoFile(status.imageUrl) && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/20 transition-colors">
+                                <span className="text-white text-xs opacity-0 hover:opacity-100">Click to view full size</span>
                               </div>
                             )}
                           </div>
+
+                          {/* Action Buttons */}
+                          {status.status === "completed" && !group.isReusedGroup && (
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex-1"
+                                onClick={() => handleExportImage(group.id)}
+                              >
+                                <Download className="w-3 h-3 mr-1" />
+                                Export
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex-1"
+                                onClick={() => handleEditPrompt(group.id)}
+                              >
+                                <Edit3 className="w-3 h-3 mr-1" />
+                                Edit Prompt
+                              </Button>
+                            </div>
+                          )}
+
+                          {/* Import Video Button */}
+                          {status.status === "completed" && !group.isReusedGroup && (
+                            <div>
+                              <input
+                                type="file"
+                                id={`video-input-${group.id}`}
+                                accept="video/*"
+                                className="hidden"
+                                onChange={(e) => handleFileInputChange(e, group.id)}
+                              />
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="w-full"
+                                onClick={() => document.getElementById(`video-input-${group.id}`)?.click()}
+                              >
+                                <Upload className="w-3 h-3 mr-1" />
+                                Import Video (SD/HD)
+                              </Button>
+                            </div>
+                          )}
 
                           {/* Video Conversion Button */}
                           {status.status === "completed" && !status.hasVideo && !group.isReusedGroup && (
@@ -719,6 +1054,22 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
         <Button onClick={onNext} size="lg" className="w-full">
           Continue to Preview & Render
         </Button>
+      )}
+
+      {/* Image Modal */}
+      {selectedGroupForModal && (
+        <ImageModal
+          isOpen={modalOpen}
+          onClose={handleCloseModal}
+          imageUrl={selectedGroupForModal.imagePath || ""}
+          prompt={selectedGroupForModal.prompt}
+          groupId={selectedGroupForModal.id}
+          onExport={handleExportImage}
+          onEditPrompt={() => {
+            handleCloseModal();
+            handleEditPrompt(selectedGroupForModal.id);
+          }}
+        />
       )}
     </div>
   );

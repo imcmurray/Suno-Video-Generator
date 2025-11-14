@@ -17,6 +17,8 @@ export interface MediaVersion {
   path: string; // blob URL or file path
   createdAt: number; // timestamp
   label: string; // display label (e.g., "Original Image", "Video v1", "Video v2")
+  quality?: 'SD' | 'HD'; // video quality (auto-detected from resolution/file size)
+  exported?: boolean; // true if image has been exported for manual upload
 }
 
 // Scene group that combines multiple lyric lines and shares one image/video

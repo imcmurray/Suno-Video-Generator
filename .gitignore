@@ -28,6 +28,12 @@ server/uploads/
 *.srt
 !example_song.srt
 
+# Exported images and imported videos
+public/exports/images/*
+!public/exports/images/.gitkeep
+public/imports/videos/*
+!public/imports/videos/.gitkeep
+
 # Python
 __pycache__/
 *.py[cod]
