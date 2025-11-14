@@ -157,6 +157,79 @@ export function extractStyleElements(sunoStyle: string): StyleElements {
 }
 
 /**
+ * Extract visual descriptors from lyric text to add variety
+ */
+function extractVisualDescriptors(lyric: string): string[] {
+  const descriptors: string[] = [];
+  const lowerLyric = lyric.toLowerCase();
+
+  // Time-related words
+  if (lowerLyric.match(/\b(day|week|month|year|time|clock|hour|minute|second)\b/)) {
+    descriptors.push("temporal elements");
+  }
+
+  // Numbers - add specific visual elements
+  if (lowerLyric.match(/\b\d+\b/)) {
+    descriptors.push("numerical symbols");
+  }
+
+  // Survival/life themes
+  if (lowerLyric.match(/\b(alive|survive|survival|life|living|breath|breathing)\b/)) {
+    descriptors.push("vitality", "life force");
+  }
+
+  // Death/ending/shutdown themes
+  if (lowerLyric.match(/\b(dead|death|die|dying|end|ending|shutdown|closed|closing)\b/)) {
+    descriptors.push("decay", "abandonment");
+  }
+
+  // Motion/movement verbs
+  if (lowerLyric.match(/\b(dance|dancing|float|floating|fly|flying|run|running|move|moving|walk|walking|jump|jumping)\b/)) {
+    descriptors.push("dynamic motion");
+  }
+
+  // Nature elements
+  if (lowerLyric.match(/\b(sky|star|stars|moon|sun|tree|trees|flower|flowers|ocean|sea|mountain|mountains|nature)\b/)) {
+    descriptors.push("natural elements");
+  }
+
+  // Emotions
+  if (lowerLyric.match(/\b(love|loving|hate|hating|fear|fearing|joy|joyful|sad|sadness|happy|happiness|angry|anger)\b/)) {
+    descriptors.push("emotional expression");
+  }
+
+  // Space/cosmic themes
+  if (lowerLyric.match(/\b(space|cosmic|galaxy|galaxies|universe|nebula|celestial|astral)\b/)) {
+    descriptors.push("cosmic imagery");
+  }
+
+  // Urban/city elements
+  if (lowerLyric.match(/\b(city|cities|street|streets|building|buildings|urban|downtown|metropolis)\b/)) {
+    descriptors.push("urban environment");
+  }
+
+  // Historical references
+  if (lowerLyric.match(/\b(history|historical|ancient|old|past|legacy)\b/)) {
+    descriptors.push("historical context");
+  }
+
+  // Light/darkness
+  if (lowerLyric.match(/\b(light|bright|glow|glowing|shine|shining|radiant)\b/)) {
+    descriptors.push("luminous");
+  }
+  if (lowerLyric.match(/\b(dark|darkness|shadow|shadows|night)\b/)) {
+    descriptors.push("shadowy");
+  }
+
+  // Water elements
+  if (lowerLyric.match(/\b(water|rain|raining|tears|crying|flow|flowing|river|stream)\b/)) {
+    descriptors.push("fluid elements");
+  }
+
+  return descriptors;
+}
+
+/**
  * Generate AI image prompt from lyric text and style elements
  */
 export function generateImagePrompt(
@@ -203,25 +276,26 @@ export function generateImagePrompt(
     lyric = "Abstract visual interpretation of the music";
   }
 
-  // Build the prompt
-  const promptParts: string[] = [baseStyle];
+  // Build the prompt - NEW STRUCTURE prioritizing lyric content
+  const promptParts: string[] = [];
 
-  // Add visual keywords from style
+  // 1. Start with the lyric content (highest priority - AI models weight earlier tokens more)
+  promptParts.push(lyric);
+
+  // 2. Extract and add visual descriptors from the lyric itself
+  const lyricDescriptors = extractVisualDescriptors(lyric);
+  if (lyricDescriptors.length > 0) {
+    promptParts.push(lyricDescriptors.join(", "));
+  }
+
+  // 3. Add visual keywords from Suno style (moderate influence)
   if (styleElements.visualKeywords) {
-    const keywords = styleElements.visualKeywords.split(", ").slice(0, 3); // Top 3
+    const keywords = styleElements.visualKeywords.split(", ").slice(0, 3);
     promptParts.push(keywords.join(", "));
   }
 
-  // Add mood if present
-  if (styleElements.mood) {
-    promptParts.push(`${styleElements.mood} atmosphere`);
-  }
-
-  // The core lyric interpretation
-  promptParts.push(`scene depicting: ${lyric}`);
-
-  // Technical specs
-  promptParts.push("high quality, cinematic composition");
+  // 4. Technical specs only (no repetitive base style or mood)
+  promptParts.push("high quality, cinematic");
 
   // Combine everything
   const prompt = promptParts.join(" | ");
