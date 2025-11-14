@@ -858,7 +858,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
                           <textarea
                             value={editedPrompt}
                             onChange={(e) => setEditedPrompt(e.target.value)}
-                            className="w-full text-xs p-2 border rounded resize-none"
+                            className="w-full text-xs p-2 border rounded resize-none bg-background text-foreground border-input placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                             rows={3}
                             placeholder="Edit prompt..."
                           />
