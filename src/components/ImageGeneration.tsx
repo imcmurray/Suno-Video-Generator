@@ -219,8 +219,9 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
 
           console.log('Generate result for group:', group.id, result);
 
-          if (result.success && result.imageData) {
-            const imageUrl = URL.createObjectURL(result.imageData);
+          if (result.success && (result.imageData || result.imageUrl)) {
+            // Handle both blob URLs (OpenAI) and direct URLs (Grok)
+            const imageUrl = result.imageUrl || URL.createObjectURL(result.imageData!);
             updateGroupImage(group.id, imageUrl);
             updateStatus(group.id, {
               status: "completed",
@@ -278,8 +279,9 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
 
           console.log('Generate result for scene:', scene.sequence, result);
 
-          if (result.success && result.imageData) {
-            const imageUrl = URL.createObjectURL(result.imageData);
+          if (result.success && (result.imageData || result.imageUrl)) {
+            // Handle both blob URLs (OpenAI) and direct URLs (Grok)
+            const imageUrl = result.imageUrl || URL.createObjectURL(result.imageData!);
             updateScene(scene.sequence, { imagePath: imageUrl });
             updateStatus(scene.sequence.toString(), {
               status: "completed",

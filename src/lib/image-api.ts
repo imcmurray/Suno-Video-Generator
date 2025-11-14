@@ -15,7 +15,8 @@ export interface ImageGenerationOptions {
 
 export interface ImageGenerationResult {
   success: boolean;
-  imageData?: Blob;
+  imageData?: Blob;  // For OpenAI (blob URLs)
+  imageUrl?: string;  // For Grok (direct URLs, CORS blocked for download)
   error?: string;
 }
 
@@ -172,20 +173,14 @@ export async function generateWithGrok(
     const result = await response.json();
     const imageUrl = result.data[0].url;
 
-    // Download the image
-    const imageResponse = await fetch(imageUrl);
-    if (!imageResponse.ok) {
-      throw new Error("Failed to download generated image");
-    }
-
-    const imageData = await imageResponse.blob();
-
-    // Resize to landscape format (1792x1024) for video
-    const resizedImageData = await resizeImageToLandscape(imageData);
+    // Grok's CDN doesn't support CORS, so we can't download the image
+    // Return the URL directly - browsers can display it in <img> tags
+    // even without CORS headers (CORS only blocks JavaScript from reading data)
+    console.log('Grok image URL:', imageUrl);
 
     return {
       success: true,
-      imageData: resizedImageData,
+      imageUrl: imageUrl,  // Return direct URL instead of blob
     };
   } catch (error) {
     return {
