@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Image as ImageIcon, CheckCircle2, XCircle, Loader2, Play, Pause, Link2, Video as VideoIcon, RefreshCw } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
@@ -22,6 +22,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
   const { project, updateScene, updateImageProgress, setProject } = useProject();
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const isPausedRef = useRef(false); // Use ref for real-time checking in async loop
   const [statuses, setStatuses] = useState<Map<string, GenerationStatus>>(new Map());
 
   const usingGrouping = project?.useGrouping && project?.sceneGroups && project?.lyricLines;
@@ -178,6 +179,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
 
     setIsGenerating(true);
     setIsPaused(false);
+    isPausedRef.current = false;
 
     if (usingGrouping && project.sceneGroups) {
       // Generate for groups (skip reused ones)
@@ -191,7 +193,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
       let failed = 0;
 
       for (const group of groupsToGenerate) {
-        if (isPaused) break;
+        if (isPausedRef.current) break;
 
         updateStatus(group.id, { status: "generating" });
 
@@ -242,7 +244,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
       let failed = 0;
 
       for (const scene of scenesToGenerate) {
-        if (isPaused) break;
+        if (isPausedRef.current) break;
 
         updateStatus(scene.sequence.toString(), { status: "generating" });
         updateImageProgress({ current: scene.sequence });
@@ -295,6 +297,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
   };
 
   const handlePause = () => {
+    isPausedRef.current = true;
     setIsPaused(true);
     setIsGenerating(false);
   };
@@ -485,7 +488,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
             if (!status) return null;
 
             return (
-              <Card key={group.id}>
+              <Card key={group.id} className={status.status === "failed" ? "border-red-500" : ""}>
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
                     <div className="flex-shrink-0">
@@ -523,7 +526,9 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
                         {group.combinedLyrics}
                       </p>
                       {status.error && (
-                        <p className="text-xs text-red-600 mt-1">{status.error}</p>
+                        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded">
+                          <p className="text-xs text-red-700 font-medium break-words">{status.error}</p>
+                        </div>
                       )}
 
                       {/* Media Preview */}
@@ -619,7 +624,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
             if (!status) return null;
 
             return (
-              <Card key={scene.sequence}>
+              <Card key={scene.sequence} className={status.status === "failed" ? "border-red-500" : ""}>
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
                     <div className="flex-shrink-0">
@@ -642,7 +647,9 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
                         {scene.lyricCleaned}
                       </p>
                       {status.error && (
-                        <p className="text-xs text-red-600 mt-1">{status.error}</p>
+                        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded">
+                          <p className="text-xs text-red-700 font-medium break-words">{status.error}</p>
+                        </div>
                       )}
                       {status.imageUrl && (
                         <div className="mt-2 w-full h-20 rounded overflow-hidden border">
