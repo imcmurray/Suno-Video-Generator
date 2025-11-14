@@ -221,7 +221,7 @@ export function generateImagePrompt(
   promptParts.push(`scene depicting: ${lyric}`);
 
   // Technical specs
-  promptParts.push("16:9 aspect ratio, high quality, cinematic composition");
+  promptParts.push("high quality, cinematic composition");
 
   // Combine everything
   const prompt = promptParts.join(" | ");
