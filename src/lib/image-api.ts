@@ -234,6 +234,95 @@ export async function generateWithGrok(
 }
 
 /**
+ * Enhance a basic prompt using AI to create rich visual descriptions
+ */
+async function enhancePromptWithAI(
+  basicPrompt: string,
+  provider: APIProvider,
+  apiKey: string
+): Promise<string> {
+  const systemPrompt = `You are a visual scene designer for AI image generation. Transform sparse prompts into detailed, vivid visual scene descriptions.
+
+Your enhanced descriptions should:
+- Include specific objects, settings, and composition details
+- Add lighting, atmosphere, and mood descriptions
+- Maintain all original style keywords and themes
+- Be concise but visually rich (under 100 words)
+- Focus on what can be visually depicted in a single image
+
+Return ONLY the enhanced visual description, no explanation or preamble.`;
+
+  const userPrompt = `Transform this prompt into a detailed visual scene description:\n\n${basicPrompt}`;
+
+  try {
+    if (provider === "openai") {
+      // Use OpenAI Chat Completions API with fast, cheap model
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 150,
+        }),
+      });
+
+      if (!response.ok) {
+        console.error('Prompt enhancement failed, using original prompt');
+        return basicPrompt;
+      }
+
+      const result = await response.json();
+      const enhanced = result.choices[0]?.message?.content?.trim();
+      return enhanced || basicPrompt;
+
+    } else if (provider === "grok") {
+      // Use Grok Chat Completions API
+      const response = await fetch("https://api.x.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "grok-beta",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 150,
+        }),
+      });
+
+      if (!response.ok) {
+        console.error('Prompt enhancement failed, using original prompt');
+        return basicPrompt;
+      }
+
+      const result = await response.json();
+      const enhanced = result.choices[0]?.message?.content?.trim();
+      return enhanced || basicPrompt;
+    }
+
+    // Fallback if provider not recognized
+    return basicPrompt;
+
+  } catch (error) {
+    console.error('Error enhancing prompt:', error);
+    // Fallback to original prompt on error
+    return basicPrompt;
+  }
+}
+
+/**
  * Generate image using specified provider
  */
 export async function generateImage(
@@ -241,11 +330,16 @@ export async function generateImage(
 ): Promise<ImageGenerationResult> {
   const { prompt, provider, apiKey, size = "1792x1024", quality } = options;
 
+  // Enhance the prompt with AI before generating image
+  console.log('Original prompt:', prompt);
+  const enhancedPrompt = await enhancePromptWithAI(prompt, provider, apiKey);
+  console.log('Enhanced prompt:', enhancedPrompt);
+
   switch (provider) {
     case "openai":
-      return generateWithOpenAI(prompt, apiKey, size, quality);
+      return generateWithOpenAI(enhancedPrompt, apiKey, size, quality);
     case "grok":
-      return generateWithGrok(prompt, apiKey);
+      return generateWithGrok(enhancedPrompt, apiKey);
     default:
       return {
         success: false,
