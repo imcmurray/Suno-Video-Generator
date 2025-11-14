@@ -27,8 +27,14 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
 
   const usingGrouping = project?.useGrouping && project?.sceneGroups && project?.lyricLines;
 
+  // Only depend on the specific data that affects initialization, not the entire project object
+  const groupsLength = project?.sceneGroups?.length ?? 0;
+  const scenesLength = project?.scenes?.length ?? 0;
+
   useEffect(() => {
     if (!project) return;
+
+    console.log('Initializing statuses - groups:', groupsLength, 'scenes:', scenesLength);
 
     const initialStatuses = new Map<string, GenerationStatus>();
 
@@ -65,7 +71,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
     }
 
     setStatuses(initialStatuses);
-  }, [project, usingGrouping]);
+  }, [groupsLength, scenesLength, usingGrouping]);
 
   const updateStatus = (id: string, updates: Partial<GenerationStatus>) => {
     setStatuses((prev) => {
