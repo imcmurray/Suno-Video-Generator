@@ -413,10 +413,21 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
   // Handle exporting image for manual upload to Grok UI
   const handleExportImage = async (groupId: string) => {
     const group = project?.sceneGroups?.find(g => g.id === groupId);
-    if (!group || !group.imagePath) return;
+
+    console.log('handleExportImage called for group:', groupId);
+    console.log('Group found:', group);
+    console.log('Group imagePath:', group?.imagePath);
+
+    if (!group || !group.imagePath) {
+      console.error('Cannot export: group or imagePath is missing');
+      alert('Cannot export: image path is missing');
+      return;
+    }
 
     try {
+      console.log('Calling exportImageToFolder with:', group.imagePath);
       const result = await exportImageToFolder(group.imagePath, groupId);
+      console.log('Export result:', result);
 
       if (result.success) {
         // Mark the current media version as exported
@@ -440,11 +451,15 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
           });
         }
 
-        alert(`Image exported successfully as ${result.filename}`);
+        const message = result.error
+          ? `${result.error}\n\nFilename: ${result.filename}`
+          : `Image exported successfully as ${result.filename}`;
+        alert(message);
       } else {
         alert(`Export failed: ${result.error}`);
       }
     } catch (error) {
+      console.error('Export error:', error);
       alert(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
@@ -612,10 +627,17 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
 
   // Modal handlers
   const handleOpenModal = (groupId: string) => {
+    console.log('handleOpenModal called for group:', groupId);
     const group = project?.sceneGroups?.find(g => g.id === groupId);
+    console.log('Group found for modal:', group);
+    console.log('Group imagePath:', group?.imagePath);
+
     if (group) {
       setSelectedGroupForModal(group);
       setModalOpen(true);
+      console.log('Modal opened');
+    } else {
+      console.error('Cannot open modal: group not found');
     }
   };
 
@@ -859,7 +881,14 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
                         <div className="mt-2 space-y-2">
                           <div
                             className="relative w-full h-20 rounded overflow-hidden border cursor-pointer hover:opacity-90 transition-opacity"
-                            onClick={() => !isVideoFile(status.imageUrl!) && handleOpenModal(group.id)}
+                            onClick={() => {
+                              console.log('Image clicked! group:', group.id);
+                              console.log('isVideoFile:', isVideoFile(status.imageUrl!));
+                              console.log('status.imageUrl:', status.imageUrl);
+                              if (!isVideoFile(status.imageUrl!)) {
+                                handleOpenModal(group.id);
+                              }
+                            }}
                           >
                             {isVideoFile(status.imageUrl) ? (
                               <video
