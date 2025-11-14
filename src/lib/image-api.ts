@@ -173,14 +173,18 @@ export async function generateWithGrok(
     const result = await response.json();
     const imageUrl = result.data[0].url;
 
-    // Grok's CDN doesn't support CORS, so we can't download the image
-    // Return the URL directly - browsers can display it in <img> tags
-    // even without CORS headers (CORS only blocks JavaScript from reading data)
-    console.log('Grok image URL:', imageUrl);
+    // Download the image to create a local blob URL
+    // This ensures images display everywhere (thumbnails + modal) and can be exported
+    const imageResponse = await fetch(imageUrl);
+    if (!imageResponse.ok) {
+      throw new Error("Failed to download generated image");
+    }
+
+    const imageData = await imageResponse.blob();
 
     return {
       success: true,
-      imageUrl: imageUrl,  // Return direct URL instead of blob
+      imageData,
     };
   } catch (error) {
     return {
