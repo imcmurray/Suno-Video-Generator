@@ -129,15 +129,6 @@ export const SceneGroupingEditor: React.FC<SceneGroupingEditorProps> = ({
       isInstrumental: false,
     };
 
-    // Debug logging
-    console.log('Created manual group:', {
-      lyrics: combinedLyrics.substring(0, 50),
-      duration: newGroup.duration,
-      start: newGroup.start,
-      end: newGroup.end,
-      warning: getDurationWarning(newGroup.duration)
-    });
-
     // Update lyric lines with group assignment
     const updatedLyricLines = lyricLines.map((line) =>
       selectedLines.has(line.id)
@@ -479,9 +470,6 @@ export const SceneGroupingEditor: React.FC<SceneGroupingEditorProps> = ({
                   // Safety check: recalculate duration if undefined/null
                   const actualDuration = group.duration ?? (group.end - group.start);
                   const warning = getDurationWarning(actualDuration);
-
-                  // Debug logging
-                  console.log(`Group "${group.combinedLyrics.substring(0, 30)}...": duration=${actualDuration}s, warning=${warning}`);
 
                   const groupLines = lyricLines.filter((line) =>
                     group.lyricLineIds.includes(line.id)
