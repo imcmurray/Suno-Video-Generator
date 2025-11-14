@@ -123,7 +123,7 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
                 type="file"
                 accept=".srt"
                 onChange={handleFileChange("srt")}
-                className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
+                className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer text-foreground"
               />
               {files.srt && (
                 <p className="text-sm text-muted-foreground">
@@ -143,7 +143,7 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
                 type="file"
                 accept=".wav,.mp3,.m4a"
                 onChange={handleFileChange("audio")}
-                className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
+                className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer text-foreground"
               />
               {files.audio && (
                 <p className="text-sm text-muted-foreground">
@@ -163,7 +163,7 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
                 type="file"
                 accept=".txt"
                 onChange={handleFileChange("sunoStyle")}
-                className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
+                className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer text-foreground"
               />
               {files.sunoStyle && (
                 <p className="text-sm text-muted-foreground">
