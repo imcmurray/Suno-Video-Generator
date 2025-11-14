@@ -117,33 +117,40 @@ export async function generateWithOpenAI(
 
 /**
  * Load cross-origin image as blob using canvas method
- * Bypasses CORS restrictions that block fetch() by using img element
+ * Note: This may fail for images without CORS headers (canvas tainting)
+ * Used only when user explicitly requests export
  */
 async function loadImageAsBlob(imageUrl: string): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous'; // Try CORS first
+    // Don't set crossOrigin - allows image to load even without CORS headers
+    // Canvas extraction may fail due to tainting, but we'll try anyway
 
     img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
 
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        reject(new Error('Failed to get canvas context'));
-        return;
-      }
-
-      ctx.drawImage(img, 0, 0);
-
-      canvas.toBlob((blob) => {
-        if (blob) {
-          resolve(blob);
-        } else {
-          reject(new Error('Failed to convert canvas to blob'));
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'));
+          return;
         }
-      }, 'image/jpeg', 0.95);
+
+        ctx.drawImage(img, 0, 0);
+
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error('Failed to convert canvas to blob'));
+          }
+        }, 'image/jpeg', 0.95);
+      } catch (error) {
+        // Canvas is tainted - can't extract data
+        reject(new Error('Canvas tainted by cross-origin image - cannot export'));
+      }
     };
 
     img.onerror = () => {
@@ -212,13 +219,11 @@ export async function generateWithGrok(
     const result = await response.json();
     const imageUrl = result.data[0].url;
 
-    // Download the image using canvas method to bypass CORS restrictions
-    // This ensures images display everywhere (thumbnails + modal) and can be exported
-    const imageData = await loadImageAsBlob(imageUrl);
-
+    // Return direct URL - browsers can display it in <img> tags without CORS issues
+    // Export function will attempt download when user explicitly exports
     return {
       success: true,
-      imageData,
+      imageUrl: imageUrl,
     };
   } catch (error) {
     return {
@@ -467,23 +472,40 @@ export function estimateCost(
 
 /**
  * Export image to the exports folder for manual upload to Grok UI
- * In a browser environment, this triggers a download with a specific filename
+ * Tries multiple methods to download cross-origin images
  */
 export async function exportImageToFolder(
   imageUrl: string,
   groupId: string
 ): Promise<{ success: boolean; filename?: string; error?: string }> {
+  const timestamp = Date.now();
+  const filename = `group-${groupId}-${timestamp}.jpg`;
+
+  // Method 1: Try direct fetch (works for OpenAI, same-origin images)
   try {
-    const timestamp = Date.now();
-    const filename = `group-${groupId}-${timestamp}.jpg`;
-
-    // Fetch the image
     const response = await fetch(imageUrl);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch image: ${response.statusText}`);
-    }
+    if (response.ok) {
+      const blob = await response.blob();
 
-    const blob = await response.blob();
+      // Trigger browser download
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(downloadUrl);
+
+      return { success: true, filename };
+    }
+  } catch (fetchError) {
+    console.log('Direct fetch failed, trying canvas method:', fetchError);
+  }
+
+  // Method 2: Try canvas method (may fail for CORS-protected images)
+  try {
+    const blob = await loadImageAsBlob(imageUrl);
 
     // Trigger browser download
     const downloadUrl = URL.createObjectURL(blob);
@@ -495,14 +517,30 @@ export async function exportImageToFolder(
     document.body.removeChild(a);
     URL.revokeObjectURL(downloadUrl);
 
+    return { success: true, filename };
+  } catch (canvasError) {
+    console.log('Canvas method failed:', canvasError);
+  }
+
+  // Method 3: Fallback - try to download via direct link (may be blocked by browser)
+  try {
+    const a = document.createElement("a");
+    a.href = imageUrl;
+    a.download = filename;
+    a.target = "_blank";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
     return {
       success: true,
       filename,
+      error: "Download initiated - if it doesn't work, right-click the image and 'Save As...'"
     };
-  } catch (error) {
+  } catch (directError) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: "Cannot download due to CORS restrictions. Please right-click the image in the preview modal and select 'Save Image As...'"
     };
   }
 }
