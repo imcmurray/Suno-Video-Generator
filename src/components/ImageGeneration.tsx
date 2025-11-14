@@ -206,6 +206,8 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
             quality: "hd",
           });
 
+          console.log('Generate result for group:', group.id, result);
+
           if (result.success && result.imageData) {
             const imageUrl = URL.createObjectURL(result.imageData);
             updateGroupImage(group.id, imageUrl);
@@ -217,15 +219,20 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
             completed++;
             updateImageProgress({ completed });
           } else {
+            console.error('Generation failed for group:', group.id, 'Error:', result.error);
             throw new Error(result.error || "Image generation failed");
           }
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : "Unknown error";
+          console.error('Caught error for group:', group.id, 'Message:', errorMessage);
+
           updateStatus(group.id, {
             status: "failed",
             error: errorMessage,
           });
+
           failed++;
+          console.log('Failed count:', failed);
           updateImageProgress({ failed });
         }
 
@@ -258,6 +265,8 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
             quality: "hd",
           });
 
+          console.log('Generate result for scene:', scene.sequence, result);
+
           if (result.success && result.imageData) {
             const imageUrl = URL.createObjectURL(result.imageData);
             updateScene(scene.sequence, { imagePath: imageUrl });
@@ -269,15 +278,20 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
             completed++;
             updateImageProgress({ completed });
           } else {
+            console.error('Generation failed for scene:', scene.sequence, 'Error:', result.error);
             throw new Error(result.error || "Image generation failed");
           }
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : "Unknown error";
+          console.error('Caught error for scene:', scene.sequence, 'Message:', errorMessage);
+
           updateStatus(scene.sequence.toString(), {
             status: "failed",
             error: errorMessage,
           });
+
           failed++;
+          console.log('Failed count:', failed);
           updateImageProgress({ failed });
         }
 

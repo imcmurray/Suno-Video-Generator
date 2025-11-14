@@ -148,18 +148,20 @@ export async function generateWithGrok(
         const errorData = await response.json();
 
         // Try multiple error message locations (different API formats)
+        // Prioritize direct error string from Grok API
         const message =
-          errorData.error?.message ||      // OpenAI format
+          errorData.error ||                // Grok format: direct error string
           errorData.message ||              // Common format
-          errorData.error?.code ||          // Some APIs use code
+          errorData.error?.message ||       // OpenAI nested format
+          errorData.code ||                 // Error code as fallback
           errorData.detail ||               // FastAPI format
-          errorData.error ||                // Sometimes error is a string
           JSON.stringify(errorData);        // Show full object as fallback
 
         errorMessage += `: ${message}`;
 
         // Log full error for debugging
         console.error('Grok API Error Response:', errorData);
+        console.error('Throwing error with message:', errorMessage);
       } catch {
         errorMessage += `: ${response.statusText || 'Unknown error'}`;
       }
