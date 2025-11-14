@@ -116,6 +116,45 @@ export async function generateWithOpenAI(
 }
 
 /**
+ * Load cross-origin image as blob using canvas method
+ * Bypasses CORS restrictions that block fetch() by using img element
+ */
+async function loadImageAsBlob(imageUrl: string): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous'; // Try CORS first
+
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Failed to get canvas context'));
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0);
+
+      canvas.toBlob((blob) => {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(new Error('Failed to convert canvas to blob'));
+        }
+      }, 'image/jpeg', 0.95);
+    };
+
+    img.onerror = () => {
+      reject(new Error('Failed to load image'));
+    };
+
+    img.src = imageUrl;
+  });
+}
+
+/**
  * Generate image using Grok (xAI) API
  * Note: Adjust endpoint based on actual Grok API documentation
  */
@@ -173,14 +212,9 @@ export async function generateWithGrok(
     const result = await response.json();
     const imageUrl = result.data[0].url;
 
-    // Download the image to create a local blob URL
+    // Download the image using canvas method to bypass CORS restrictions
     // This ensures images display everywhere (thumbnails + modal) and can be exported
-    const imageResponse = await fetch(imageUrl);
-    if (!imageResponse.ok) {
-      throw new Error("Failed to download generated image");
-    }
-
-    const imageData = await imageResponse.blob();
+    const imageData = await loadImageAsBlob(imageUrl);
 
     return {
       success: true,
