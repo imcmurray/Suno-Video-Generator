@@ -1,19 +1,21 @@
 import React, { useState, useEffect } from "react";
-import { Image as ImageIcon, CheckCircle2, XCircle, Loader2, Play, Pause, Link2 } from "lucide-react";
+import { Image as ImageIcon, CheckCircle2, XCircle, Loader2, Play, Pause, Link2, Video as VideoIcon, RefreshCw } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Progress } from "./ui/progress";
 import { useProject } from "../lib/project-context";
-import { generateImage, estimateCost } from "../lib/image-api";
-import { SceneData, SceneGroup } from "../types";
+import { generateImage, estimateCost, convertImageToVideo } from "../lib/image-api";
+import { SceneData, SceneGroup, MediaVersion } from "../types";
+import { v4 as uuidv4 } from 'uuid';
 
 interface GenerationStatus {
   id: string; // scene sequence or group ID
-  status: "pending" | "generating" | "completed" | "failed" | "reused";
+  status: "pending" | "generating" | "completed" | "failed" | "reused" | "converting_video";
   error?: string;
   imageUrl?: string;
   label: string; // Display label
   isReused?: boolean;
+  hasVideo?: boolean; // true if group has at least one video version
 }
 
 export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) => {
@@ -75,12 +77,88 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
     });
   };
 
+  // Helper to check if a path is a video file
+  const isVideoFile = (path: string): boolean => {
+    return /\.(mp4|mov|webm)$/i.test(path);
+  };
+
+  // Helper to add a media version to a group
+  const addMediaVersion = (groupId: string, mediaPath: string, type: 'image' | 'video', label: string) => {
+    if (!project || !project.sceneGroups) return;
+
+    const updatedGroups = project.sceneGroups.map((group) => {
+      if (group.id === groupId) {
+        const newVersion: MediaVersion = {
+          id: uuidv4(),
+          type,
+          path: mediaPath,
+          createdAt: Date.now(),
+          label,
+        };
+
+        const existingVersions = group.mediaVersions || [];
+        const updatedVersions = [...existingVersions, newVersion];
+
+        return {
+          ...group,
+          mediaVersions: updatedVersions,
+          activeMediaId: newVersion.id,
+          imagePath: mediaPath, // Update active media path
+        };
+      }
+      return group;
+    });
+
+    setProject({
+      ...project,
+      sceneGroups: updatedGroups,
+    });
+  };
+
+  // Helper to select a specific media version
+  const selectMediaVersion = (groupId: string, versionId: string) => {
+    if (!project || !project.sceneGroups) return;
+
+    const updatedGroups = project.sceneGroups.map((group) => {
+      if (group.id === groupId) {
+        const version = group.mediaVersions?.find(v => v.id === versionId);
+        if (version) {
+          return {
+            ...group,
+            activeMediaId: versionId,
+            imagePath: version.path,
+          };
+        }
+      }
+      return group;
+    });
+
+    setProject({
+      ...project,
+      sceneGroups: updatedGroups,
+    });
+  };
+
   const updateGroupImage = (groupId: string, imageUrl: string) => {
     if (!project || !project.sceneGroups) return;
 
     const updatedGroups = project.sceneGroups.map((group) => {
       if (group.id === groupId) {
-        return { ...group, imagePath: imageUrl };
+        // Initialize media versions with the first image
+        const mediaVersion: MediaVersion = {
+          id: uuidv4(),
+          type: 'image',
+          path: imageUrl,
+          createdAt: Date.now(),
+          label: 'Original Image',
+        };
+
+        return {
+          ...group,
+          imagePath: imageUrl,
+          mediaVersions: [mediaVersion],
+          activeMediaId: mediaVersion.id,
+        };
       }
       // Also update reused groups that reference this one
       if (group.isReusedGroup && group.originalGroupId === groupId) {
@@ -235,6 +313,65 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
     generateImagesSequentially();
   };
 
+  const handleConvertToVideo = async (groupId: string) => {
+    if (!project || !project.apiKey) return;
+
+    const group = project.sceneGroups?.find(g => g.id === groupId);
+    if (!group || !group.imagePath) return;
+
+    updateStatus(groupId, { status: "converting_video" });
+
+    try {
+      const videoCount = group.mediaVersions?.filter(v => v.type === 'video').length || 0;
+      const videoLabel = videoCount === 0 ? 'Video v1' : `Video v${videoCount + 1}`;
+
+      const result = await convertImageToVideo({
+        imageUrl: group.imagePath,
+        prompt: group.prompt,
+        provider: 'grok',
+        apiKey: project.apiKey,
+      });
+
+      if (result.success && result.videoData) {
+        const videoUrl = URL.createObjectURL(result.videoData);
+        addMediaVersion(groupId, videoUrl, 'video', videoLabel);
+        updateStatus(groupId, {
+          status: "completed",
+          imageUrl: videoUrl,
+          hasVideo: true,
+        });
+      } else {
+        throw new Error(result.error || "Video conversion failed");
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      updateStatus(groupId, {
+        status: "completed", // Keep as completed since image exists
+        error: `Video conversion failed: ${errorMessage}`,
+      });
+    }
+  };
+
+  const handleRetryVideo = async (groupId: string) => {
+    // Same as convert to video - adds another version
+    await handleConvertToVideo(groupId);
+  };
+
+  const handleSelectVersion = (groupId: string, versionId: string) => {
+    selectMediaVersion(groupId, versionId);
+
+    // Update status to reflect the active media
+    const group = project?.sceneGroups?.find(g => g.id === groupId);
+    const version = group?.mediaVersions?.find(v => v.id === versionId);
+
+    if (version) {
+      updateStatus(groupId, {
+        imageUrl: version.path,
+        hasVideo: group?.mediaVersions?.some(v => v.type === 'video') || false,
+      });
+    }
+  };
+
   if (!project) return null;
 
   // Calculate stats
@@ -361,7 +498,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
                       {status.status === "failed" && (
                         <XCircle className="w-5 h-5 text-red-600" />
                       )}
-                      {status.status === "generating" && (
+                      {(status.status === "generating" || status.status === "converting_video") && (
                         <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
                       )}
                       {status.status === "pending" && (
@@ -376,6 +513,11 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
                             Reused
                           </div>
                         )}
+                        {status.status === "converting_video" && (
+                          <div className="text-xs bg-purple-500/20 text-purple-700 px-1.5 py-0.5 rounded">
+                            Converting...
+                          </div>
+                        )}
                       </div>
                       <p className="text-xs text-muted-foreground truncate">
                         {group.combinedLyrics}
@@ -383,13 +525,85 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
                       {status.error && (
                         <p className="text-xs text-red-600 mt-1">{status.error}</p>
                       )}
+
+                      {/* Media Preview */}
                       {status.imageUrl && (
-                        <div className="mt-2 w-full h-20 rounded overflow-hidden border">
-                          <img
-                            src={status.imageUrl}
-                            alt={`Group ${index + 1}`}
-                            className="w-full h-full object-cover"
-                          />
+                        <div className="mt-2 space-y-2">
+                          <div className="relative w-full h-20 rounded overflow-hidden border">
+                            {isVideoFile(status.imageUrl) ? (
+                              <video
+                                src={status.imageUrl}
+                                className="w-full h-full object-cover"
+                                controls={false}
+                                muted
+                                loop
+                                playsInline
+                              />
+                            ) : (
+                              <img
+                                src={status.imageUrl}
+                                alt={`Group ${index + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                            )}
+                            {isVideoFile(status.imageUrl) && (
+                              <div className="absolute top-1 right-1 bg-purple-600 text-white px-1.5 py-0.5 rounded text-xs font-semibold">
+                                VIDEO
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Video Conversion Button */}
+                          {status.status === "completed" && !status.hasVideo && !group.isReusedGroup && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full"
+                              onClick={() => handleConvertToVideo(group.id)}
+                            >
+                              <VideoIcon className="w-3 h-3 mr-1" />
+                              Convert to Video
+                            </Button>
+                          )}
+
+                          {/* Version Picker */}
+                          {group.mediaVersions && group.mediaVersions.length > 1 && (
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-muted-foreground">Versions:</p>
+                              <div className="flex flex-wrap gap-1">
+                                {group.mediaVersions.map((version) => {
+                                  const isActive = version.id === group.activeMediaId;
+                                  const isVideo = version.type === 'video';
+
+                                  return (
+                                    <div key={version.id} className="flex gap-1">
+                                      <Button
+                                        size="sm"
+                                        variant={isActive ? "default" : "outline"}
+                                        className="text-xs px-2 py-1 h-auto"
+                                        onClick={() => handleSelectVersion(group.id, version.id)}
+                                      >
+                                        {isVideo && <VideoIcon className="w-3 h-3 mr-1" />}
+                                        {version.label}
+                                        {isActive && " ✓"}
+                                      </Button>
+                                      {isVideo && (
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="text-xs px-2 py-1 h-auto"
+                                          onClick={() => handleRetryVideo(group.id)}
+                                          title="Retry video generation"
+                                        >
+                                          <RefreshCw className="w-3 h-3" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

@@ -10,7 +10,16 @@ export interface LyricLine {
   assignedGroupId?: string; // which group this line belongs to
 }
 
-// Scene group that combines multiple lyric lines and shares one image
+// Media version tracking for image-to-video workflow
+export interface MediaVersion {
+  id: string; // unique identifier for this version
+  type: 'image' | 'video'; // media type
+  path: string; // blob URL or file path
+  createdAt: number; // timestamp
+  label: string; // display label (e.g., "Original Image", "Video v1", "Video v2")
+}
+
+// Scene group that combines multiple lyric lines and shares one image/video
 export interface SceneGroup {
   id: string; // unique identifier
   lyricLineIds: string[]; // array of LyricLine IDs in this group
@@ -20,7 +29,9 @@ export interface SceneGroup {
   combinedLyrics: string; // merged text from all lines
   prompt: string; // AI image prompt for the group
   filename: string; // scene_group_001.jpg
-  imagePath?: string; // local path to generated image
+  imagePath?: string; // local path to active media (backward compatible)
+  mediaVersions?: MediaVersion[]; // all generated media versions (images + videos)
+  activeMediaId?: string; // which version is currently selected
   isReusedGroup: boolean; // true if this reuses another group's image
   originalGroupId?: string; // reference to original group if reused
   isInstrumental: boolean; // true for [Intro]/[Outro]/[Instrumental] sections

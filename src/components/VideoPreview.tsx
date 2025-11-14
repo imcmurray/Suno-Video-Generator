@@ -72,14 +72,24 @@ export const VideoPreview: React.FC = () => {
     };
   }, [project.audioFile]);
 
+  // Check if using grouping mode
+  const usingGrouping = project.useGrouping && project.sceneGroups && project.lyricLines;
+
   // Calculate total duration in frames (30 fps)
   const fps = 30;
-  const totalDurationSeconds = project.scenes[project.scenes.length - 1]?.end || 60;
+  const totalDurationSeconds = usingGrouping
+    ? (project.sceneGroups && project.sceneGroups.length > 0
+        ? project.sceneGroups[project.sceneGroups.length - 1].end
+        : 60)
+    : (project.scenes[project.scenes.length - 1]?.end || 60);
   const durationInFrames = Math.floor(totalDurationSeconds * fps);
 
   const compositionProps = {
     scenes: project.scenes,
     audioPath: audioUrl,
+    sceneGroups: project.sceneGroups,
+    lyricLines: project.lyricLines,
+    useGrouping: project.useGrouping,
   };
 
   // Show loading message while audio is being prefetched
@@ -253,28 +263,51 @@ export const VideoPreview: React.FC = () => {
                 />
               </div>
 
-              {/* Scene Timeline */}
+              {/* Scene/Group Timeline */}
               <div className="mt-4 space-y-2">
-                <p className="text-sm font-medium">Scene Timeline</p>
+                <p className="text-sm font-medium">
+                  {usingGrouping ? "Group Timeline" : "Scene Timeline"}
+                </p>
                 <div className="flex gap-1 h-8 bg-muted rounded overflow-hidden">
-                  {project.scenes.map((scene) => {
-                    const widthPercent =
-                      (scene.duration / totalDurationSeconds) * 100;
-                    return (
-                      <div
-                        key={scene.sequence}
-                        className="bg-primary hover:bg-primary/80 transition-colors cursor-pointer relative group"
-                        style={{ width: `${widthPercent}%` }}
-                        title={scene.lyricCleaned}
-                      >
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-xs text-primary-foreground font-medium opacity-0 group-hover:opacity-100">
-                            {scene.sequence}
-                          </span>
+                  {usingGrouping && project.sceneGroups ? (
+                    project.sceneGroups.map((group, index) => {
+                      const widthPercent =
+                        (group.duration / totalDurationSeconds) * 100;
+                      return (
+                        <div
+                          key={group.id}
+                          className="bg-primary hover:bg-primary/80 transition-colors cursor-pointer relative group"
+                          style={{ width: `${widthPercent}%` }}
+                          title={group.combinedLyrics}
+                        >
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-xs text-primary-foreground font-medium opacity-0 group-hover:opacity-100">
+                              {index + 1}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  ) : (
+                    project.scenes.map((scene) => {
+                      const widthPercent =
+                        (scene.duration / totalDurationSeconds) * 100;
+                      return (
+                        <div
+                          key={scene.sequence}
+                          className="bg-primary hover:bg-primary/80 transition-colors cursor-pointer relative group"
+                          style={{ width: `${widthPercent}%` }}
+                          title={scene.lyricCleaned}
+                        >
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-xs text-primary-foreground font-medium opacity-0 group-hover:opacity-100">
+                              {scene.sequence}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
                 <div className="flex justify-between text-xs text-muted-foreground">
                   <span>0:00</span>
@@ -297,8 +330,14 @@ export const VideoPreview: React.FC = () => {
             </CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <p className="text-sm text-muted-foreground">Total Scenes</p>
-                <p className="text-lg font-semibold">{project.scenes.length}</p>
+                <p className="text-sm text-muted-foreground">
+                  {usingGrouping ? "Total Groups" : "Total Scenes"}
+                </p>
+                <p className="text-lg font-semibold">
+                  {usingGrouping && project.sceneGroups
+                    ? project.sceneGroups.length
+                    : project.scenes.length}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Duration</p>
@@ -434,29 +473,60 @@ export const VideoPreview: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Scene List */}
+          {/* Scene/Group List */}
           <Card>
             <CardHeader>
-              <CardTitle>Scenes</CardTitle>
+              <CardTitle>{usingGrouping ? "Groups" : "Scenes"}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2 max-h-80 overflow-y-auto">
-                {project.scenes.map((scene) => (
-                  <div
-                    key={scene.sequence}
-                    className="flex items-start gap-2 p-2 hover:bg-accent rounded text-sm"
-                  >
-                    <span className="font-semibold text-muted-foreground min-w-[2rem]">
-                      {scene.sequence}.
-                    </span>
-                    <div className="flex-1">
-                      <p className="font-medium">{scene.lyricCleaned}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {scene.duration.toFixed(1)}s
-                      </p>
+                {usingGrouping && project.sceneGroups ? (
+                  project.sceneGroups.map((group, index) => {
+                    const groupLines = project.lyricLines?.filter((line) =>
+                      group.lyricLineIds.includes(line.id)
+                    );
+
+                    return (
+                      <div
+                        key={group.id}
+                        className="flex items-start gap-2 p-2 hover:bg-accent rounded text-sm"
+                      >
+                        <span className="font-semibold text-muted-foreground min-w-[2rem]">
+                          {index + 1}.
+                        </span>
+                        <div className="flex-1">
+                          <p className="font-medium">{group.combinedLyrics}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {group.duration.toFixed(1)}s • {groupLines?.length || 0} line(s)
+                          </p>
+                          {group.isReusedGroup && (
+                            <span className="text-xs text-blue-600">Reused</span>
+                          )}
+                          {group.isInstrumental && (
+                            <span className="text-xs text-purple-600">Instrumental</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  project.scenes.map((scene) => (
+                    <div
+                      key={scene.sequence}
+                      className="flex items-start gap-2 p-2 hover:bg-accent rounded text-sm"
+                    >
+                      <span className="font-semibold text-muted-foreground min-w-[2rem]">
+                        {scene.sequence}.
+                      </span>
+                      <div className="flex-1">
+                        <p className="font-medium">{scene.lyricCleaned}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {scene.duration.toFixed(1)}s
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>

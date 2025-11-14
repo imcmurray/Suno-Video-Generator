@@ -19,6 +19,19 @@ export interface ImageGenerationResult {
   error?: string;
 }
 
+export interface VideoGenerationOptions {
+  imageUrl: string; // blob URL or data URL of the image to convert
+  prompt: string; // optional prompt to guide video generation
+  provider: "grok"; // currently only Grok supports image-to-video
+  apiKey: string;
+}
+
+export interface VideoGenerationResult {
+  success: boolean;
+  videoData?: Blob;
+  error?: string;
+}
+
 /**
  * Generate image using OpenAI DALL-E 3 API
  */
@@ -199,6 +212,100 @@ export async function generateImage(
         error: `Unknown provider: ${provider}`,
       };
   }
+}
+
+/**
+ * Convert image to video using Grok (xAI) API
+ * Grok generates 6-second videos from images
+ */
+export async function convertImageToVideo(
+  options: VideoGenerationOptions
+): Promise<VideoGenerationResult> {
+  const { imageUrl, prompt, apiKey } = options;
+
+  try {
+    // First, convert the image blob URL to a base64 data URL
+    const imageBlob = await fetch(imageUrl).then(r => r.blob());
+    const base64Image = await blobToBase64(imageBlob);
+
+    const url = "https://api.x.ai/v1/video/generations";
+
+    const payload = {
+      model: "grok-2-vision-video",
+      image: base64Image,
+      prompt: prompt || "animate this image with smooth, natural motion",
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      let errorMessage = `HTTP ${response.status}`;
+
+      try {
+        const errorData = await response.json();
+        const message =
+          errorData.error?.message ||
+          errorData.message ||
+          errorData.error?.code ||
+          errorData.detail ||
+          errorData.error ||
+          JSON.stringify(errorData);
+
+        errorMessage += `: ${message}`;
+        console.error('Grok Video API Error Response:', errorData);
+      } catch {
+        errorMessage += `: ${response.statusText || 'Unknown error'}`;
+      }
+
+      throw new Error(errorMessage);
+    }
+
+    const result = await response.json();
+    const videoUrl = result.data[0].url;
+
+    // Download the video
+    const videoResponse = await fetch(videoUrl);
+    if (!videoResponse.ok) {
+      throw new Error("Failed to download generated video");
+    }
+
+    const videoData = await videoResponse.blob();
+
+    return {
+      success: true,
+      videoData,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Convert blob to base64 data URL
+ */
+async function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result);
+      } else {
+        reject(new Error('Failed to convert blob to base64'));
+      }
+    };
+    reader.onerror = () => reject(new Error('FileReader error'));
+    reader.readAsDataURL(blob);
+  });
 }
 
 /**
