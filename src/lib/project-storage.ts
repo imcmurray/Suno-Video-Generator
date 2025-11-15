@@ -110,31 +110,48 @@ export function exportPrompts(project: ProjectState): void {
   // Export scene groups with all prompt variations
   const promptsData = {
     metadata: project.metadata,
-    groups: project.sceneGroups?.map((group) => ({
-      id: group.id,
-      sequence: project.sceneGroups!.indexOf(group) + 1,
-      start: group.start,
-      end: group.end,
-      duration: group.duration,
-      combined_lyrics: group.combinedLyrics,
-      lyric_line_ids: group.lyricLineIds,
-      filename: group.filename,
+    groups: project.sceneGroups?.map((group) => {
+      // Map lyric line IDs to full lyric line data
+      const lyricLines = group.lyricLineIds
+        .map((lineId) => project.lyricLines?.find((line) => line.id === lineId))
+        .filter((line) => line !== undefined)
+        .map((line) => ({
+          id: line!.id,
+          sequence: line!.sequence,
+          start: line!.start,
+          end: line!.end,
+          duration: line!.duration,
+          lyric: line!.lyric,
+          lyricCleaned: line!.lyricCleaned,
+        }));
 
-      // All prompt variations
-      prompt_basic: group.prompt,
-      prompt_enhanced: group.enhancedPrompt || null,
-      prompt_custom: group.customPrompt || null,
-      selected_prompt_type: group.selectedPromptType || "basic",
+      return {
+        id: group.id,
+        sequence: project.sceneGroups!.indexOf(group) + 1,
+        start: group.start,
+        end: group.end,
+        duration: group.duration,
+        combined_lyrics: group.combinedLyrics,
+        lyric_line_ids: group.lyricLineIds,
+        lyric_lines: lyricLines,
+        filename: group.filename,
 
-      // Convenience field: the actual active prompt being used
-      active_prompt: getActivePrompt(group),
+        // All prompt variations
+        prompt_basic: group.prompt,
+        prompt_enhanced: group.enhancedPrompt || null,
+        prompt_custom: group.customPrompt || null,
+        selected_prompt_type: group.selectedPromptType || "basic",
 
-      // Metadata
-      is_reused_group: group.isReusedGroup,
-      original_group_id: group.originalGroupId || null,
-      is_instrumental: group.isInstrumental,
-      is_gap: group.isGap || false,
-    })) || [],
+        // Convenience field: the actual active prompt being used
+        active_prompt: getActivePrompt(group),
+
+        // Metadata
+        is_reused_group: group.isReusedGroup,
+        original_group_id: group.originalGroupId || null,
+        is_instrumental: group.isInstrumental,
+        is_gap: group.isGap || false,
+      };
+    }) || [],
   };
 
   const json = JSON.stringify(promptsData, null, 2);
