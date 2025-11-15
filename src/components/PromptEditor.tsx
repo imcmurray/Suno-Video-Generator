@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Edit2, Image as ImageIcon, RefreshCw, ChevronDown, ChevronUp, Link2, Sparkles } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
@@ -375,7 +375,8 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
   const [expandedScenes, setExpandedScenes] = useState<Set<number>>(new Set());
   const [pickerScene, setPickerScene] = useState<SceneData | null>(null);
   const [isEnhancing, setIsEnhancing] = useState(false);
-  const [isCancelling, setIsCancelling] = useState(false);
+  const isCancellingRef = useRef(false); // Ref for actual cancellation logic
+  const [showStopping, setShowStopping] = useState(false); // State for UI only
   const [enhancementProgress, setEnhancementProgress] = useState({ current: 0, total: 0 });
   const [enhancementError, setEnhancementError] = useState<string | null>(null);
   const [enhancementSuccess, setEnhancementSuccess] = useState<{ total: number; enhanced: number; failed: number } | null>(null);
@@ -420,7 +421,8 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
   };
 
   const handleStopEnhancement = () => {
-    setIsCancelling(true);
+    isCancellingRef.current = true; // Set ref for cancellation logic
+    setShowStopping(true); // Update UI to show "Stopping..."
   };
 
   const handleGenerateEnhancedPrompts = async () => {
@@ -430,6 +432,8 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
     }
 
     setIsEnhancing(true);
+    isCancellingRef.current = false; // Reset cancellation flag
+    setShowStopping(false); // Reset UI state
     setEnhancementError(null);
     setEnhancementSuccess(null);
     setEnhancementProgress({ current: 0, total: project.sceneGroups.length });
@@ -468,7 +472,7 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
         console.log(`\n=== Processing batch: prompts ${batchStart + 1}-${batchEnd} ===`);
 
         // Check if user requested cancellation
-        if (isCancelling) {
+        if (isCancellingRef.current) {
           console.log('Enhancement cancelled by user');
           break;
         }
@@ -567,7 +571,8 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
       setEnhancementError(error instanceof Error ? error.message : "Enhancement failed");
     } finally {
       setIsEnhancing(false);
-      setIsCancelling(false);
+      isCancellingRef.current = false;
+      setShowStopping(false);
       setEnhancementProgress({ current: 0, total: 0 });
     }
   };
@@ -677,10 +682,10 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                 {isEnhancing && (
                   <Button
                     onClick={handleStopEnhancement}
-                    disabled={isCancelling}
+                    disabled={showStopping}
                     variant="destructive"
                   >
-                    {isCancelling ? 'Stopping...' : 'Stop'}
+                    {showStopping ? 'Stopping...' : 'Stop'}
                   </Button>
                 )}
               </div>
