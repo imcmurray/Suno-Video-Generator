@@ -6,7 +6,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { useProject } from "../lib/project-context";
 import { srtToProjectData } from "../lib/srt-parser";
-import { estimateCost, APIProvider } from "../lib/image-api";
+import { estimateCost, APIProvider, enhanceAllPromptsWithTheme } from "../lib/image-api";
 
 export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
   const { setProject, setApiConfig } = useProject();
@@ -19,6 +19,7 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
   const [apiKey, setApiKey] = useState("");
   const [baseStyle, setBaseStyle] = useState("photorealistic, cinematic");
   const [loading, setLoading] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
   const handleFileChange = (type: "srt" | "audio" | "sunoStyle") => (
@@ -46,6 +47,7 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
 
     try {
       // Read SRT file
+      setLoadingStatus("Reading files...");
       const srtText = await files.srt.text();
 
       // Read Suno style file if provided
@@ -54,8 +56,43 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
         sunoStyleText = await files.sunoStyle.text();
       }
 
-      // Parse SRT and generate prompts
+      // Parse SRT and generate basic prompts
+      setLoadingStatus("Generating basic prompts...");
       const projectData = srtToProjectData(srtText, sunoStyleText, baseStyle);
+
+      // Enhance all prompts with AI (theme-aware)
+      if (projectData.sceneGroups && projectData.sceneGroups.length > 0) {
+        setLoadingStatus(`Enhancing ${projectData.sceneGroups.length} prompts with AI...`);
+        console.log('Enhancing prompts with AI...');
+
+        // Extract basic prompts
+        const basicPrompts = projectData.sceneGroups.map(group => group.prompt);
+
+        // Enhance with theme context
+        const themeContext = {
+          sunoStyle: sunoStyleText,
+          genre: projectData.metadata.extractedStyleElements.genres.join(', '),
+          mood: projectData.metadata.extractedStyleElements.mood,
+        };
+
+        const enhancedPrompts = await enhanceAllPromptsWithTheme(
+          basicPrompts,
+          apiProvider,
+          apiKey,
+          themeContext
+        );
+
+        // Update scene groups with enhanced prompts and set default to "enhanced"
+        projectData.sceneGroups = projectData.sceneGroups.map((group, index) => ({
+          ...group,
+          enhancedPrompt: enhancedPrompts[index],
+          selectedPromptType: "enhanced" as const,
+        }));
+
+        console.log('Prompt enhancement complete!');
+      }
+
+      setLoadingStatus("Creating project...");
 
       // Create project state
       setProject({
@@ -258,7 +295,7 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
           className="w-full"
         >
           {loading ? (
-            "Creating Project..."
+            loadingStatus || "Creating Project..."
           ) : (
             <>
               <Upload className="w-4 h-4 mr-2" />

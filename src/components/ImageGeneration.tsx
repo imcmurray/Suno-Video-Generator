@@ -218,8 +218,19 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
         updateStatus(group.id, { status: "generating" });
 
         try {
+          // Get the correct prompt based on user's selection
+          let promptToUse = group.prompt; // default to basic
+          if (group.selectedPromptType === "enhanced" && group.enhancedPrompt) {
+            promptToUse = group.enhancedPrompt;
+          } else if (group.selectedPromptType === "custom" && group.customPrompt) {
+            promptToUse = group.customPrompt;
+          }
+
+          console.log('Using prompt type:', group.selectedPromptType);
+          console.log('Prompt:', promptToUse);
+
           const result = await generateImage({
-            prompt: group.prompt,
+            prompt: promptToUse,
             provider: project.apiProvider,
             apiKey: project.apiKey,
             size: "1792x1024",

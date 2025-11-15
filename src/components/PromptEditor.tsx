@@ -159,17 +159,29 @@ const SceneGroupEditor: React.FC<SceneGroupEditorProps> = ({
   isExpanded,
   onToggle,
 }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedPrompt, setEditedPrompt] = useState(group.prompt);
+  const [isEditingCustom, setIsEditingCustom] = useState(false);
+  const [customPromptText, setCustomPromptText] = useState(group.customPrompt || group.prompt);
+  const [selectedType, setSelectedType] = useState<"basic" | "enhanced" | "custom">(
+    group.selectedPromptType || "enhanced"
+  );
 
-  const handleSave = () => {
-    onUpdate({ prompt: editedPrompt });
-    setIsEditing(false);
+  const handlePromptTypeChange = (type: "basic" | "enhanced" | "custom") => {
+    setSelectedType(type);
+    onUpdate({ selectedPromptType: type });
   };
 
-  const handleCancel = () => {
-    setEditedPrompt(group.prompt);
-    setIsEditing(false);
+  const handleSaveCustom = () => {
+    onUpdate({
+      customPrompt: customPromptText,
+      selectedPromptType: "custom"
+    });
+    setSelectedType("custom");
+    setIsEditingCustom(false);
+  };
+
+  const handleCancelCustom = () => {
+    setCustomPromptText(group.customPrompt || group.prompt);
+    setIsEditingCustom(false);
   };
 
   const groupLines = lyricLines.filter((line) =>
@@ -237,43 +249,107 @@ const SceneGroupEditor: React.FC<SceneGroupEditorProps> = ({
           </div>
 
           {/* Prompt Editor - disabled for reused groups */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>AI Image Prompt</Label>
-              {!isEditing && !group.isReusedGroup && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsEditing(true)}
-                >
-                  <Edit2 className="w-4 h-4 mr-2" />
-                  Edit
-                </Button>
-              )}
-            </div>
+          <div className="space-y-3">
+            <Label>AI Image Prompt</Label>
 
             {group.isReusedGroup ? (
               <div className="p-3 bg-blue-500/10 text-blue-700 rounded text-sm">
                 This group reuses the image from another group. Edit the original group's prompt instead.
               </div>
-            ) : isEditing ? (
-              <div className="space-y-2">
-                <textarea
-                  className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  value={editedPrompt}
-                  onChange={(e) => setEditedPrompt(e.target.value)}
-                />
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={handleSave}>
-                    Save
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={handleCancel}>
-                    Cancel
-                  </Button>
+            ) : (
+              <div className="space-y-3">
+                {/* Basic Prompt Option */}
+                <div className="flex items-start gap-3 p-3 border rounded hover:bg-accent/30 transition-colors">
+                  <input
+                    type="radio"
+                    id={`basic-${group.id}`}
+                    name={`prompt-type-${group.id}`}
+                    checked={selectedType === "basic"}
+                    onChange={() => handlePromptTypeChange("basic")}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <label htmlFor={`basic-${group.id}`} className="font-medium text-sm cursor-pointer">
+                      Basic Prompt
+                    </label>
+                    <p className="text-xs text-muted-foreground mt-1">{group.prompt}</p>
+                  </div>
+                </div>
+
+                {/* AI Enhanced Prompt Option */}
+                {group.enhancedPrompt && (
+                  <div className="flex items-start gap-3 p-3 border rounded hover:bg-accent/30 transition-colors">
+                    <input
+                      type="radio"
+                      id={`enhanced-${group.id}`}
+                      name={`prompt-type-${group.id}`}
+                      checked={selectedType === "enhanced"}
+                      onChange={() => handlePromptTypeChange("enhanced")}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <label htmlFor={`enhanced-${group.id}`} className="font-medium text-sm cursor-pointer flex items-center gap-2">
+                        AI Enhanced
+                        <span className="text-xs bg-green-500/20 text-green-700 px-2 py-0.5 rounded">
+                          Recommended
+                        </span>
+                      </label>
+                      <p className="text-xs text-muted-foreground mt-1">{group.enhancedPrompt}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Custom Prompt Option */}
+                <div className="flex items-start gap-3 p-3 border rounded hover:bg-accent/30 transition-colors">
+                  <input
+                    type="radio"
+                    id={`custom-${group.id}`}
+                    name={`prompt-type-${group.id}`}
+                    checked={selectedType === "custom"}
+                    onChange={() => handlePromptTypeChange("custom")}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <label htmlFor={`custom-${group.id}`} className="font-medium text-sm cursor-pointer">
+                        Custom Edit
+                      </label>
+                      {selectedType === "custom" && !isEditingCustom && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setIsEditingCustom(true)}
+                        >
+                          <Edit2 className="w-4 h-4 mr-2" />
+                          Edit
+                        </Button>
+                      )}
+                    </div>
+
+                    {isEditingCustom ? (
+                      <div className="space-y-2 mt-2">
+                        <textarea
+                          className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          value={customPromptText}
+                          onChange={(e) => setCustomPromptText(e.target.value)}
+                        />
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={handleSaveCustom}>
+                            Save
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={handleCancelCustom}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {group.customPrompt || "Click 'Edit' to create a custom prompt"}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
-            ) : (
-              <p className="text-sm bg-muted p-3 rounded">{group.prompt}</p>
             )}
           </div>
         </CardContent>

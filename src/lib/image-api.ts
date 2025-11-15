@@ -235,22 +235,44 @@ export async function generateWithGrok(
 
 /**
  * Enhance a basic prompt using AI to create rich visual descriptions
+ * Can optionally include song theme context for consistency
  */
-async function enhancePromptWithAI(
+export async function enhancePromptWithAI(
   basicPrompt: string,
   provider: APIProvider,
-  apiKey: string
+  apiKey: string,
+  themeContext?: {
+    sunoStyle?: string;
+    genre?: string;
+    mood?: string;
+  }
 ): Promise<string> {
-  const systemPrompt = `You are a visual scene designer for AI image generation. Transform sparse prompts into detailed, vivid visual scene descriptions.
+  // Build theme-aware system prompt
+  let systemPrompt = `You are a visual scene designer for AI image generation. Transform sparse prompts into detailed, vivid visual scene descriptions.
 
 Your enhanced descriptions should:
 - Include specific objects, settings, and composition details
 - Add lighting, atmosphere, and mood descriptions
 - Maintain all original style keywords and themes
 - Be concise but visually rich (under 100 words)
-- Focus on what can be visually depicted in a single image
+- Focus on what can be visually depicted in a single image`;
 
-Return ONLY the enhanced visual description, no explanation or preamble.`;
+  // Add theme context if provided
+  if (themeContext) {
+    systemPrompt += `\n\nIMPORTANT: This scene is part of a music video with the following theme. Ensure visual consistency:\n`;
+    if (themeContext.sunoStyle) {
+      systemPrompt += `- Song Style: ${themeContext.sunoStyle}\n`;
+    }
+    if (themeContext.genre) {
+      systemPrompt += `- Genre: ${themeContext.genre}\n`;
+    }
+    if (themeContext.mood) {
+      systemPrompt += `- Overall Mood: ${themeContext.mood}\n`;
+    }
+    systemPrompt += `\nMaintain this aesthetic across all scenes while adding scene-specific details.`;
+  }
+
+  systemPrompt += `\n\nReturn ONLY the enhanced visual description, no explanation or preamble.`;
 
   const userPrompt = `Transform this prompt into a detailed visual scene description:\n\n${basicPrompt}`;
 
@@ -323,23 +345,61 @@ Return ONLY the enhanced visual description, no explanation or preamble.`;
 }
 
 /**
+ * Enhance all scene group prompts with theme-aware AI
+ * Returns enhanced prompts in same order as input
+ */
+export async function enhanceAllPromptsWithTheme(
+  basicPrompts: string[],
+  provider: APIProvider,
+  apiKey: string,
+  themeContext?: {
+    sunoStyle?: string;
+    genre?: string;
+    mood?: string;
+  }
+): Promise<string[]> {
+  const enhancedPrompts: string[] = [];
+
+  console.log(`Enhancing ${basicPrompts.length} prompts with theme context...`);
+
+  for (let i = 0; i < basicPrompts.length; i++) {
+    const basicPrompt = basicPrompts[i];
+    console.log(`Enhancing prompt ${i + 1}/${basicPrompts.length}...`);
+
+    try {
+      const enhanced = await enhancePromptWithAI(basicPrompt, provider, apiKey, themeContext);
+      enhancedPrompts.push(enhanced);
+
+      // Add small delay to avoid rate limiting
+      if (i < basicPrompts.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    } catch (error) {
+      console.error(`Failed to enhance prompt ${i + 1}, using original`);
+      enhancedPrompts.push(basicPrompt);
+    }
+  }
+
+  console.log(`Prompt enhancement complete: ${enhancedPrompts.length} prompts enhanced`);
+  return enhancedPrompts;
+}
+
+/**
  * Generate image using specified provider
+ * Note: Prompts are pre-enhanced during project creation, so we use them as-is
  */
 export async function generateImage(
   options: ImageGenerationOptions
 ): Promise<ImageGenerationResult> {
   const { prompt, provider, apiKey, size = "1792x1024", quality } = options;
 
-  // Enhance the prompt with AI before generating image
-  console.log('Original prompt:', prompt);
-  const enhancedPrompt = await enhancePromptWithAI(prompt, provider, apiKey);
-  console.log('Enhanced prompt:', enhancedPrompt);
+  console.log('Generating image with prompt:', prompt);
 
   switch (provider) {
     case "openai":
-      return generateWithOpenAI(enhancedPrompt, apiKey, size, quality);
+      return generateWithOpenAI(prompt, apiKey, size, quality);
     case "grok":
-      return generateWithGrok(enhancedPrompt, apiKey);
+      return generateWithGrok(prompt, apiKey);
     default:
       return {
         success: false,

@@ -29,7 +29,10 @@ export interface SceneGroup {
   end: number; // end time (from last line)
   duration: number; // total duration
   combinedLyrics: string; // merged text from all lines
-  prompt: string; // AI image prompt for the group
+  prompt: string; // Basic AI image prompt for the group
+  enhancedPrompt?: string; // AI-enhanced version with rich visual details
+  selectedPromptType?: "basic" | "enhanced" | "custom"; // Which prompt user selected
+  customPrompt?: string; // User's custom edited prompt
   filename: string; // scene_group_001.jpg
   imagePath?: string; // local path to active media (backward compatible)
   mediaVersions?: MediaVersion[]; // all generated media versions (images + videos)
