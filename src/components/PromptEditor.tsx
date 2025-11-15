@@ -375,6 +375,7 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
   const [expandedScenes, setExpandedScenes] = useState<Set<number>>(new Set());
   const [pickerScene, setPickerScene] = useState<SceneData | null>(null);
   const [isEnhancing, setIsEnhancing] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [enhancementProgress, setEnhancementProgress] = useState({ current: 0, total: 0 });
   const [enhancementError, setEnhancementError] = useState<string | null>(null);
   const [enhancementSuccess, setEnhancementSuccess] = useState<{ total: number; enhanced: number; failed: number } | null>(null);
@@ -416,6 +417,10 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
       ...project,
       sceneGroups: updatedGroups,
     });
+  };
+
+  const handleStopEnhancement = () => {
+    setIsCancelling(true);
   };
 
   const handleGenerateEnhancedPrompts = async () => {
@@ -462,6 +467,12 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
 
         console.log(`\n=== Processing batch: prompts ${batchStart + 1}-${batchEnd} ===`);
 
+        // Check if user requested cancellation
+        if (isCancelling) {
+          console.log('Enhancement cancelled by user');
+          break;
+        }
+
         // Process batch in parallel
         const batchPromises = batchIndices.map(async (index) => {
           console.log(`Enhancing prompt ${index + 1}/${basicPrompts.length}...`);
@@ -494,7 +505,9 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
         // Wait for all prompts in batch to complete
         const batchResults = await Promise.all(batchPromises);
 
-        // Update state incrementally after each batch
+        // Accumulate all updates from this batch
+        const groupUpdates: Record<number, { enhancedPrompt: string; selectedPromptType: "enhanced" }> = {};
+
         batchResults.forEach(({ index, enhanced, success }) => {
           if (success) {
             successCount++;
@@ -502,21 +515,11 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
             fallbackCount++;
           }
 
-          // Update individual group in state immediately
-          const updatedGroups = project.sceneGroups!.map((g, idx) =>
-            idx === index
-              ? {
-                  ...g,
-                  enhancedPrompt: enhanced,
-                  selectedPromptType: g.selectedPromptType || ("enhanced" as const),
-                }
-              : g
-          );
-
-          setProject({
-            ...project,
-            sceneGroups: updatedGroups,
-          });
+          // Accumulate update
+          groupUpdates[index] = {
+            enhancedPrompt: enhanced,
+            selectedPromptType: "enhanced" as const,
+          };
 
           // Update progress
           setEnhancementProgress({
@@ -524,6 +527,19 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
             total: basicPrompts.length,
           });
         });
+
+        // Apply all batch updates in SINGLE setState call with functional update
+        setProject(prevProject => ({
+          ...prevProject,
+          sceneGroups: prevProject.sceneGroups!.map((g, idx) =>
+            groupUpdates[idx]
+              ? {
+                  ...g,
+                  ...groupUpdates[idx],
+                }
+              : g
+          ),
+        }));
 
         console.log(`✓ Batch complete. Updated ${batchResults.length} prompts in state.`);
 
@@ -551,6 +567,7 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
       setEnhancementError(error instanceof Error ? error.message : "Enhancement failed");
     } finally {
       setIsEnhancing(false);
+      setIsCancelling(false);
       setEnhancementProgress({ current: 0, total: 0 });
     }
   };
@@ -642,20 +659,31 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                   </div>
                 )}
               </div>
-              <Button
-                onClick={handleGenerateEnhancedPrompts}
-                disabled={isEnhancing}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                {isEnhancing ? (
-                  <>Enhancing {enhancementProgress.current}/{enhancementProgress.total}...</>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    Generate AI Enhanced Prompts
-                  </>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleGenerateEnhancedPrompts}
+                  disabled={isEnhancing}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {isEnhancing ? (
+                    <>Enhancing {enhancementProgress.current}/{enhancementProgress.total}...</>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Generate AI Enhanced Prompts
+                    </>
+                  )}
+                </Button>
+                {isEnhancing && (
+                  <Button
+                    onClick={handleStopEnhancement}
+                    disabled={isCancelling}
+                    variant="destructive"
+                  >
+                    {isCancelling ? 'Stopping...' : 'Stop'}
+                  </Button>
                 )}
-              </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
