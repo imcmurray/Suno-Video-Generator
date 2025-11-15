@@ -377,6 +377,7 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [enhancementProgress, setEnhancementProgress] = useState({ current: 0, total: 0 });
   const [enhancementError, setEnhancementError] = useState<string | null>(null);
+  const [enhancementSuccess, setEnhancementSuccess] = useState<{ total: number; enhanced: number; failed: number } | null>(null);
 
   if (!project) return null;
 
@@ -425,6 +426,7 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
 
     setIsEnhancing(true);
     setEnhancementError(null);
+    setEnhancementSuccess(null);
     setEnhancementProgress({ current: 0, total: project.sceneGroups.length });
 
     try {
@@ -442,8 +444,14 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
 
       // Enhance prompts with progress tracking
       const enhancedPrompts: string[] = [];
+      let successCount = 0;
+      let fallbackCount = 0;
+
       for (let i = 0; i < basicPrompts.length; i++) {
         setEnhancementProgress({ current: i + 1, total: basicPrompts.length });
+
+        console.log(`\n=== Enhancing prompt ${i + 1}/${basicPrompts.length} ===`);
+        console.log('Basic prompt:', basicPrompts[i]);
 
         try {
           const { enhancePromptWithAI } = await import("../lib/image-api");
@@ -453,6 +461,18 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
             project.apiKey,
             themeContext
           );
+
+          console.log('Enhanced prompt received:', enhanced);
+
+          // Check if enhancement actually changed the prompt
+          if (enhanced !== basicPrompts[i]) {
+            console.log('✓ Prompt was enhanced (different from basic)');
+            successCount++;
+          } else {
+            console.log('✗ Prompt unchanged (enhancement failed or returned same)');
+            fallbackCount++;
+          }
+
           enhancedPrompts.push(enhanced);
 
           // Small delay to avoid rate limiting
@@ -460,11 +480,17 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
             await new Promise(resolve => setTimeout(resolve, 500));
           }
         } catch (error) {
-          console.error(`Failed to enhance prompt ${i + 1}:`, error);
+          console.error(`✗ Failed to enhance prompt ${i + 1}:`, error);
+          fallbackCount++;
           // Use basic prompt as fallback
           enhancedPrompts.push(basicPrompts[i]);
         }
       }
+
+      console.log(`\n=== Enhancement Summary ===`);
+      console.log(`Total prompts: ${basicPrompts.length}`);
+      console.log(`Successfully enhanced: ${successCount}`);
+      console.log(`Fell back to basic: ${fallbackCount}`);
 
       // Update project with enhanced prompts
       const updatedGroups = project.sceneGroups.map((group, index) => ({
@@ -473,12 +499,28 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
         selectedPromptType: group.selectedPromptType || ("enhanced" as const),
       }));
 
+      console.log('\n=== Updating Project State ===');
+      console.log('Updated groups (first 2):', updatedGroups.slice(0, 2).map(g => ({
+        id: g.id,
+        hasEnhancedPrompt: !!g.enhancedPrompt,
+        enhancedPromptLength: g.enhancedPrompt?.length,
+        enhancedPromptPreview: g.enhancedPrompt?.substring(0, 100) + '...'
+      })));
+
       setProject({
         ...project,
         sceneGroups: updatedGroups,
       });
 
-      console.log('Prompt enhancement complete!');
+      console.log('✓ Prompt enhancement complete!');
+      console.log('✓ State updated - check if "AI Enhanced" badges appear now');
+
+      // Set success summary
+      setEnhancementSuccess({
+        total: basicPrompts.length,
+        enhanced: successCount,
+        failed: fallbackCount
+      });
     } catch (error) {
       console.error('Enhancement error:', error);
       setEnhancementError(error instanceof Error ? error.message : "Enhancement failed");
@@ -561,6 +603,12 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                 {enhancementError && (
                   <div className="p-3 bg-destructive/10 text-destructive rounded text-sm mb-4">
                     {enhancementError}
+                  </div>
+                )}
+                {enhancementSuccess && (
+                  <div className="p-3 bg-green-500/10 text-green-700 rounded text-sm mb-4">
+                    ✓ Enhancement complete! {enhancementSuccess.enhanced} of {enhancementSuccess.total} prompts successfully enhanced.
+                    {enhancementSuccess.failed > 0 && ` (${enhancementSuccess.failed} fell back to basic)`}
                   </div>
                 )}
                 {isEnhancing && (
