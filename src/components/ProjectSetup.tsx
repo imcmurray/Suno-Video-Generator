@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Upload, FileAudio, FileText, Sparkles } from "lucide-react";
+import { Upload, FileAudio, FileText, Sparkles, FileJson } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
@@ -7,13 +7,16 @@ import { Label } from "./ui/label";
 import { useProject } from "../lib/project-context";
 import { srtToProjectData } from "../lib/srt-parser";
 import { estimateCost, APIProvider, enhanceAllPromptsWithTheme } from "../lib/image-api";
+import { loadProject } from "../lib/project-storage";
 
 export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
   const { setProject, setApiConfig } = useProject();
+  const [mode, setMode] = useState<"create" | "import">("create");
   const [files, setFiles] = useState<{
     srt?: File;
     audio?: File;
     sunoStyle?: File;
+    project?: File;
   }>({});
   const [apiProvider, setApiProvider] = useState<APIProvider>("openai");
   const [apiKey, setApiKey] = useState("");
@@ -22,7 +25,7 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
   const [loadingStatus, setLoadingStatus] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
-  const handleFileChange = (type: "srt" | "audio" | "sunoStyle") => (
+  const handleFileChange = (type: "srt" | "audio" | "sunoStyle" | "project") => (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = e.target.files?.[0];
@@ -139,6 +142,66 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
     }
   };
 
+  const handleImportProject = async () => {
+    if (!files.project || !files.audio) {
+      setError("Please upload both project JSON and audio files");
+      return;
+    }
+
+    if (!apiKey) {
+      setError("Please enter your API key");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Load JSON
+      setLoadingStatus("Loading project file...");
+      const importedData = await loadProject(files.project);
+
+      // Validate structure
+      if (!importedData.metadata || !importedData.scenes) {
+        throw new Error("Invalid project file - missing required data");
+      }
+
+      setLoadingStatus("Restoring project...");
+
+      // Create project state from imported data
+      setProject({
+        metadata: importedData.metadata,
+        scenes: importedData.scenes || [],
+        lyricLines: importedData.lyricLines,
+        sceneGroups: importedData.sceneGroups,
+        useGrouping: importedData.useGrouping,
+        audioFile: files.audio, // User must provide audio
+        srtFile: files.project, // Use project file as placeholder
+        apiProvider: apiProvider, // User can override
+        apiKey, // User must provide API key
+        imageGenerationProgress: importedData.imageGenerationProgress || {
+          total: importedData.scenes?.length || 0,
+          completed: 0,
+          failed: 0,
+        },
+      });
+
+      setApiConfig(apiProvider, apiKey);
+
+      console.log("Project imported successfully!");
+      console.log(`Loaded ${importedData.scenes?.length || 0} scenes`);
+      console.log(`Loaded ${importedData.sceneGroups?.length || 0} scene groups`);
+
+      // Move to next step
+      onComplete();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to import project");
+    } finally {
+      setLoading(false);
+      setLoadingStatus("");
+    }
+  };
+
   const estimatedCost = files.srt
     ? estimateCost(files.srt ? 30 : 0, apiProvider, "hd") // Estimate ~30 scenes
     : 0;
@@ -153,36 +216,91 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
       </div>
 
       <div className="grid gap-6">
+        {/* Mode Selection */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex gap-4">
+              <Button
+                variant={mode === "create" ? "default" : "outline"}
+                onClick={() => setMode("create")}
+                className="flex-1"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Create New Project
+              </Button>
+              <Button
+                variant={mode === "import" ? "default" : "outline"}
+                onClick={() => setMode("import")}
+                className="flex-1"
+              >
+                <FileJson className="w-4 h-4 mr-2" />
+                Import Project
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* File Upload Section */}
         <Card>
           <CardHeader>
-            <CardTitle>Upload Files</CardTitle>
+            <CardTitle>{mode === "create" ? "Upload Files" : "Import Project Files"}</CardTitle>
             <CardDescription>
-              Upload your SRT lyrics file and audio from Suno
+              {mode === "create"
+                ? "Upload your SRT lyrics file and audio from Suno"
+                : "Upload your exported project JSON and audio file"}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* SRT File */}
-            <div className="space-y-2">
-              <Label htmlFor="srt-file" className="flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                SRT Subtitle File *
-              </Label>
-              <Input
-                id="srt-file"
-                type="file"
-                accept=".srt"
-                onChange={handleFileChange("srt")}
-                className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer text-foreground"
-              />
-              {files.srt && (
-                <p className="text-sm text-muted-foreground">
-                  Selected: {files.srt.name}
+            {mode === "import" && (
+              /* Project JSON File */
+              <div className="space-y-2">
+                <Label htmlFor="project-file" className="flex items-center gap-2">
+                  <FileJson className="w-4 h-4" />
+                  Project JSON File *
+                </Label>
+                <Input
+                  id="project-file"
+                  type="file"
+                  accept=".json"
+                  onChange={handleFileChange("project")}
+                  className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer text-foreground"
+                />
+                {files.project && (
+                  <p className="text-sm text-muted-foreground">
+                    Selected: {files.project.name}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Previously exported project file (*_project.json)
                 </p>
-              )}
-            </div>
+              </div>
+            )}
 
-            {/* Audio File */}
+            {mode === "create" && (
+              <>
+                {/* SRT File */}
+                <div className="space-y-2">
+                  <Label htmlFor="srt-file" className="flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    SRT Subtitle File *
+                  </Label>
+                  <Input
+                    id="srt-file"
+                    type="file"
+                    accept=".srt"
+                    onChange={handleFileChange("srt")}
+                    className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer text-foreground"
+                  />
+                  {files.srt && (
+                    <p className="text-sm text-muted-foreground">
+                      Selected: {files.srt.name}
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Audio File - Required in both modes */}
             <div className="space-y-2">
               <Label htmlFor="audio-file" className="flex items-center gap-2">
                 <FileAudio className="w-4 h-4" />
@@ -200,30 +318,37 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
                   Selected: {files.audio.name}
                 </p>
               )}
-            </div>
-
-            {/* Suno Style File (Optional) */}
-            <div className="space-y-2">
-              <Label htmlFor="style-file" className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4" />
-                Suno Style Prompt (Optional)
-              </Label>
-              <Input
-                id="style-file"
-                type="file"
-                accept=".txt"
-                onChange={handleFileChange("sunoStyle")}
-                className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer text-foreground"
-              />
-              {files.sunoStyle && (
-                <p className="text-sm text-muted-foreground">
-                  Selected: {files.sunoStyle.name}
+              {mode === "import" && (
+                <p className="text-xs text-muted-foreground">
+                  Audio file is required for video rendering
                 </p>
               )}
-              <p className="text-xs text-muted-foreground">
-                The prompt you used to generate the song in Suno
-              </p>
             </div>
+
+            {mode === "create" && (
+              /* Suno Style File (Optional) */
+              <div className="space-y-2">
+                <Label htmlFor="style-file" className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  Suno Style Prompt (Optional)
+                </Label>
+                <Input
+                  id="style-file"
+                  type="file"
+                  accept=".txt"
+                  onChange={handleFileChange("sunoStyle")}
+                  className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer text-foreground"
+                />
+                {files.sunoStyle && (
+                  <p className="text-sm text-muted-foreground">
+                    Selected: {files.sunoStyle.name}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  The prompt you used to generate the song in Suno
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -265,30 +390,34 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
               </p>
             </div>
 
-            {/* Base Style */}
-            <div className="space-y-2">
-              <Label htmlFor="base-style">Base Visual Style</Label>
-              <Input
-                id="base-style"
-                type="text"
-                value={baseStyle}
-                onChange={(e) => setBaseStyle(e.target.value)}
-                placeholder="photorealistic, cinematic"
-              />
-              <p className="text-xs text-muted-foreground">
-                Applied to all scenes (e.g., "photorealistic", "anime", "oil painting")
-              </p>
-            </div>
+            {mode === "create" && (
+              <>
+                {/* Base Style */}
+                <div className="space-y-2">
+                  <Label htmlFor="base-style">Base Visual Style</Label>
+                  <Input
+                    id="base-style"
+                    type="text"
+                    value={baseStyle}
+                    onChange={(e) => setBaseStyle(e.target.value)}
+                    placeholder="photorealistic, cinematic"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Applied to all scenes (e.g., "photorealistic", "anime", "oil painting")
+                  </p>
+                </div>
 
-            {/* Cost Estimate */}
-            {estimatedCost > 0 && (
-              <div className="p-4 bg-muted rounded-lg">
-                <p className="text-sm font-medium">Estimated Cost</p>
-                <p className="text-2xl font-bold">${estimatedCost.toFixed(2)}</p>
-                <p className="text-xs text-muted-foreground">
-                  Based on ~30 scenes at $0.08 per image (DALL-E 3 HD)
-                </p>
-              </div>
+                {/* Cost Estimate */}
+                {estimatedCost > 0 && (
+                  <div className="p-4 bg-muted rounded-lg">
+                    <p className="text-sm font-medium">Estimated Cost</p>
+                    <p className="text-2xl font-bold">${estimatedCost.toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Based on ~30 scenes at $0.08 per image (DALL-E 3 HD)
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -302,17 +431,32 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
 
         {/* Action Button */}
         <Button
-          onClick={handleCreateProject}
-          disabled={loading || !files.srt || !files.audio || !apiKey}
+          onClick={mode === "create" ? handleCreateProject : handleImportProject}
+          disabled={
+            loading ||
+            !files.audio ||
+            !apiKey ||
+            (mode === "create" && !files.srt) ||
+            (mode === "import" && !files.project)
+          }
           size="lg"
           className="w-full"
         >
           {loading ? (
-            loadingStatus || "Creating Project..."
+            loadingStatus || (mode === "create" ? "Creating Project..." : "Importing Project...")
           ) : (
             <>
-              <Upload className="w-4 h-4 mr-2" />
-              Create Project & Generate Prompts
+              {mode === "create" ? (
+                <>
+                  <Upload className="w-4 h-4 mr-2" />
+                  Create Project & Generate Prompts
+                </>
+              ) : (
+                <>
+                  <FileJson className="w-4 h-4 mr-2" />
+                  Import Project
+                </>
+              )}
             </>
           )}
         </Button>

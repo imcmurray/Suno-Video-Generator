@@ -94,7 +94,10 @@ export function exportSRT(project: ProjectState): void {
 }
 
 /**
- * Export prompts as JSON for reference
+ * Export complete project as JSON for import/restoration
+ * Includes all scenes, lyric lines, prompts, and project settings
+ * Note: Does not include API keys (security) or File objects (can't serialize)
+ * Audio file must be re-provided on import
  */
 export function exportPrompts(project: ProjectState): void {
   // Helper to get the active prompt based on user's selection
@@ -107,9 +110,15 @@ export function exportPrompts(project: ProjectState): void {
     return group.prompt; // Default to basic
   };
 
-  // Export scene groups with all prompt variations
+  // Export complete project data for import/restoration
   const promptsData = {
+    version: "1.0", // For future compatibility
     metadata: project.metadata,
+    scenes: project.scenes,
+    lyricLines: project.lyricLines,
+    useGrouping: project.useGrouping,
+    apiProvider: project.apiProvider,
+    imageGenerationProgress: project.imageGenerationProgress,
     groups: project.sceneGroups?.map((group) => {
       // Map lyric line IDs to full lyric line data
       const lyricLines = group.lyricLineIds
@@ -156,7 +165,7 @@ export function exportPrompts(project: ProjectState): void {
 
   const json = JSON.stringify(promptsData, null, 2);
   const blob = new Blob([json], { type: "application/json" });
-  const filename = `${project.metadata.srtFile?.replace(".srt", "") || "project"}_prompts.json`;
+  const filename = `${project.metadata.srtFile?.replace(".srt", "") || "project"}_project.json`;
 
   saveAs(blob, filename);
 }
