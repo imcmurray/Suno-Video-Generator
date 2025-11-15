@@ -442,48 +442,95 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
 
       console.log('Starting prompt enhancement with theme context:', themeContext);
 
-      // Enhance prompts with progress tracking
-      const enhancedPrompts: string[] = [];
+      // Batch processing configuration
+      const BATCH_SIZE = 3; // Process 3 prompts in parallel
+      const BATCH_DELAY_MS = 500; // Delay between batches
+
+      // Import once outside the loop
+      const { enhancePromptWithAI } = await import("../lib/image-api");
+
       let successCount = 0;
       let fallbackCount = 0;
 
-      for (let i = 0; i < basicPrompts.length; i++) {
-        setEnhancementProgress({ current: i + 1, total: basicPrompts.length });
+      // Process prompts in batches
+      for (let batchStart = 0; batchStart < basicPrompts.length; batchStart += BATCH_SIZE) {
+        const batchEnd = Math.min(batchStart + BATCH_SIZE, basicPrompts.length);
+        const batchIndices = Array.from(
+          { length: batchEnd - batchStart },
+          (_, i) => batchStart + i
+        );
 
-        console.log(`\n=== Enhancing prompt ${i + 1}/${basicPrompts.length} ===`);
-        console.log('Basic prompt:', basicPrompts[i]);
+        console.log(`\n=== Processing batch: prompts ${batchStart + 1}-${batchEnd} ===`);
 
-        try {
-          const { enhancePromptWithAI } = await import("../lib/image-api");
-          const enhanced = await enhancePromptWithAI(
-            basicPrompts[i],
-            project.apiProvider,
-            project.apiKey,
-            themeContext
-          );
+        // Process batch in parallel
+        const batchPromises = batchIndices.map(async (index) => {
+          console.log(`Enhancing prompt ${index + 1}/${basicPrompts.length}...`);
+          console.log('Basic prompt:', basicPrompts[index]);
 
-          console.log('Enhanced prompt received:', enhanced);
+          try {
+            const enhanced = await enhancePromptWithAI(
+              basicPrompts[index],
+              project.apiProvider!,
+              project.apiKey!,
+              themeContext
+            );
 
-          // Check if enhancement actually changed the prompt
-          if (enhanced !== basicPrompts[i]) {
-            console.log('✓ Prompt was enhanced (different from basic)');
+            console.log('Enhanced prompt received:', enhanced);
+
+            // Check if enhancement actually changed the prompt
+            if (enhanced !== basicPrompts[index]) {
+              console.log('✓ Prompt was enhanced (different from basic)');
+              return { index, enhanced, success: true };
+            } else {
+              console.log('✗ Prompt unchanged (enhancement failed or returned same)');
+              return { index, enhanced, success: false };
+            }
+          } catch (error) {
+            console.error(`✗ Failed to enhance prompt ${index + 1}:`, error);
+            return { index, enhanced: basicPrompts[index], success: false };
+          }
+        });
+
+        // Wait for all prompts in batch to complete
+        const batchResults = await Promise.all(batchPromises);
+
+        // Update state incrementally after each batch
+        batchResults.forEach(({ index, enhanced, success }) => {
+          if (success) {
             successCount++;
           } else {
-            console.log('✗ Prompt unchanged (enhancement failed or returned same)');
             fallbackCount++;
           }
 
-          enhancedPrompts.push(enhanced);
+          // Update individual group in state immediately
+          const updatedGroups = project.sceneGroups!.map((g, idx) =>
+            idx === index
+              ? {
+                  ...g,
+                  enhancedPrompt: enhanced,
+                  selectedPromptType: g.selectedPromptType || ("enhanced" as const),
+                }
+              : g
+          );
 
-          // Small delay to avoid rate limiting
-          if (i < basicPrompts.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-        } catch (error) {
-          console.error(`✗ Failed to enhance prompt ${i + 1}:`, error);
-          fallbackCount++;
-          // Use basic prompt as fallback
-          enhancedPrompts.push(basicPrompts[i]);
+          setProject({
+            ...project,
+            sceneGroups: updatedGroups,
+          });
+
+          // Update progress
+          setEnhancementProgress({
+            current: index + 1,
+            total: basicPrompts.length,
+          });
+        });
+
+        console.log(`✓ Batch complete. Updated ${batchResults.length} prompts in state.`);
+
+        // Delay between batches (not individual calls)
+        if (batchEnd < basicPrompts.length) {
+          console.log(`Waiting ${BATCH_DELAY_MS}ms before next batch...`);
+          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
         }
       }
 
@@ -491,29 +538,7 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
       console.log(`Total prompts: ${basicPrompts.length}`);
       console.log(`Successfully enhanced: ${successCount}`);
       console.log(`Fell back to basic: ${fallbackCount}`);
-
-      // Update project with enhanced prompts
-      const updatedGroups = project.sceneGroups.map((group, index) => ({
-        ...group,
-        enhancedPrompt: enhancedPrompts[index],
-        selectedPromptType: group.selectedPromptType || ("enhanced" as const),
-      }));
-
-      console.log('\n=== Updating Project State ===');
-      console.log('Updated groups (first 2):', updatedGroups.slice(0, 2).map(g => ({
-        id: g.id,
-        hasEnhancedPrompt: !!g.enhancedPrompt,
-        enhancedPromptLength: g.enhancedPrompt?.length,
-        enhancedPromptPreview: g.enhancedPrompt?.substring(0, 100) + '...'
-      })));
-
-      setProject({
-        ...project,
-        sceneGroups: updatedGroups,
-      });
-
-      console.log('✓ Prompt enhancement complete!');
-      console.log('✓ State updated - check if "AI Enhanced" badges appear now');
+      console.log('✓ All prompts enhanced and state updated incrementally!');
 
       // Set success summary
       setEnhancementSuccess({
