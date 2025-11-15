@@ -1,6 +1,7 @@
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import { ProjectState } from "./project-context";
+import { SceneGroup } from "../types";
 
 /**
  * Save project state to JSON file
@@ -96,18 +97,44 @@ export function exportSRT(project: ProjectState): void {
  * Export prompts as JSON for reference
  */
 export function exportPrompts(project: ProjectState): void {
+  // Helper to get the active prompt based on user's selection
+  const getActivePrompt = (group: SceneGroup): string => {
+    if (group.selectedPromptType === "custom" && group.customPrompt) {
+      return group.customPrompt;
+    } else if (group.selectedPromptType === "enhanced" && group.enhancedPrompt) {
+      return group.enhancedPrompt;
+    }
+    return group.prompt; // Default to basic
+  };
+
+  // Export scene groups with all prompt variations
   const promptsData = {
     metadata: project.metadata,
-    segments: project.scenes.map((scene) => ({
-      sequence: scene.sequence,
-      start: scene.start,
-      end: scene.end,
-      duration: scene.duration,
-      lyric: scene.lyric,
-      lyric_cleaned: scene.lyricCleaned,
-      prompt: scene.prompt,
-      filename: scene.filename,
-    })),
+    groups: project.sceneGroups?.map((group) => ({
+      id: group.id,
+      sequence: project.sceneGroups!.indexOf(group) + 1,
+      start: group.start,
+      end: group.end,
+      duration: group.duration,
+      combined_lyrics: group.combinedLyrics,
+      lyric_line_ids: group.lyricLineIds,
+      filename: group.filename,
+
+      // All prompt variations
+      prompt_basic: group.prompt,
+      prompt_enhanced: group.enhancedPrompt || null,
+      prompt_custom: group.customPrompt || null,
+      selected_prompt_type: group.selectedPromptType || "basic",
+
+      // Convenience field: the actual active prompt being used
+      active_prompt: getActivePrompt(group),
+
+      // Metadata
+      is_reused_group: group.isReusedGroup,
+      original_group_id: group.originalGroupId || null,
+      is_instrumental: group.isInstrumental,
+      is_gap: group.isGap || false,
+    })) || [],
   };
 
   const json = JSON.stringify(promptsData, null, 2);
