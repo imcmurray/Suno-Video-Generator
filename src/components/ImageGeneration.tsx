@@ -709,6 +709,16 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
   const savedImages = originalSceneCount - uniqueItems;
   const savedCost = savedImages * 0.08; // Assuming $0.08 per image
 
+  // Helper function to get the prompt that should be displayed/used based on user's selection
+  const getSelectedPrompt = (group: SceneGroup): string => {
+    if (group.selectedPromptType === "enhanced" && group.enhancedPrompt) {
+      return group.enhancedPrompt;
+    } else if (group.selectedPromptType === "custom" && group.customPrompt) {
+      return group.customPrompt;
+    }
+    return group.prompt; // fallback to basic
+  };
+
   return (
     <div className="container max-w-6xl mx-auto py-8 px-4">
       <div className="mb-8">
@@ -1112,7 +1122,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
           isOpen={modalOpen}
           onClose={handleCloseModal}
           imageUrl={selectedGroupImageUrl}
-          prompt={selectedGroupForModal.prompt}
+          prompt={getSelectedPrompt(selectedGroupForModal)}
           groupId={selectedGroupForModal.id}
           onExport={handleExportImage}
           onEditPrompt={() => {
