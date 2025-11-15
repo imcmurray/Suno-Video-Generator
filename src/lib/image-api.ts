@@ -335,7 +335,7 @@ Your enhanced descriptions should:
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "grok-beta",
+          model: "grok-3",
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt }
