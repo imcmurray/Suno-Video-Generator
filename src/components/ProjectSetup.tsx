@@ -61,35 +61,42 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
       const projectData = srtToProjectData(srtText, sunoStyleText, baseStyle);
 
       // Enhance all prompts with AI (theme-aware)
+      let enhancementFailed = false;
       if (projectData.sceneGroups && projectData.sceneGroups.length > 0) {
-        setLoadingStatus(`Enhancing ${projectData.sceneGroups.length} prompts with AI...`);
-        console.log('Enhancing prompts with AI...');
+        try {
+          setLoadingStatus(`Enhancing ${projectData.sceneGroups.length} prompts with AI...`);
+          console.log('Enhancing prompts with AI...');
 
-        // Extract basic prompts
-        const basicPrompts = projectData.sceneGroups.map(group => group.prompt);
+          // Extract basic prompts
+          const basicPrompts = projectData.sceneGroups.map(group => group.prompt);
 
-        // Enhance with theme context
-        const themeContext = {
-          sunoStyle: sunoStyleText,
-          genre: projectData.metadata.extractedStyleElements.genres.join(', '),
-          mood: projectData.metadata.extractedStyleElements.mood,
-        };
+          // Enhance with theme context
+          const themeContext = {
+            sunoStyle: sunoStyleText,
+            genre: projectData.metadata.extractedStyleElements.genres.join(', '),
+            mood: projectData.metadata.extractedStyleElements.mood,
+          };
 
-        const enhancedPrompts = await enhanceAllPromptsWithTheme(
-          basicPrompts,
-          apiProvider,
-          apiKey,
-          themeContext
-        );
+          const enhancedPrompts = await enhanceAllPromptsWithTheme(
+            basicPrompts,
+            apiProvider,
+            apiKey,
+            themeContext
+          );
 
-        // Update scene groups with enhanced prompts and set default to "enhanced"
-        projectData.sceneGroups = projectData.sceneGroups.map((group, index) => ({
-          ...group,
-          enhancedPrompt: enhancedPrompts[index],
-          selectedPromptType: "enhanced" as const,
-        }));
+          // Update scene groups with enhanced prompts and set default to "enhanced"
+          projectData.sceneGroups = projectData.sceneGroups.map((group, index) => ({
+            ...group,
+            enhancedPrompt: enhancedPrompts[index],
+            selectedPromptType: "enhanced" as const,
+          }));
 
-        console.log('Prompt enhancement complete!');
+          console.log('Prompt enhancement complete!');
+        } catch (enhanceError) {
+          console.error('Prompt enhancement failed, continuing with basic prompts:', enhanceError);
+          enhancementFailed = true;
+          // Don't fail project creation - continue with basic prompts only
+        }
       }
 
       setLoadingStatus("Creating project...");
@@ -117,12 +124,18 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
 
       setApiConfig(apiProvider, apiKey);
 
+      // Show warning if enhancement failed but project succeeded
+      if (enhancementFailed) {
+        setError("Project created successfully, but AI prompt enhancement failed. You can generate enhanced prompts later from the Edit Scene Prompts page.");
+      }
+
       // Move to next step
       onComplete();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create project");
     } finally {
       setLoading(false);
+      setLoadingStatus("");
     }
   };
 

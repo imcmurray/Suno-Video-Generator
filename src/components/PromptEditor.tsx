@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Edit2, Image as ImageIcon, RefreshCw, ChevronDown, ChevronUp, Link2 } from "lucide-react";
+import { Edit2, Image as ImageIcon, RefreshCw, ChevronDown, ChevronUp, Link2, Sparkles } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
@@ -7,6 +7,7 @@ import { Label } from "./ui/label";
 import { useProject } from "../lib/project-context";
 import { SceneData, SceneGroup, LyricLine } from "../types";
 import { ImageVariationPicker } from "./ImageVariationPicker";
+import { enhanceAllPromptsWithTheme } from "../lib/image-api";
 
 interface SceneEditorProps {
   scene: SceneData;
@@ -213,6 +214,17 @@ const SceneGroupEditor: React.FC<SceneGroupEditorProps> = ({
                     Instrumental
                   </div>
                 )}
+                {/* Enhancement Status Badge */}
+                {group.enhancedPrompt ? (
+                  <div className="flex items-center gap-1 text-xs bg-green-500/20 text-green-700 px-2 py-1 rounded">
+                    <Sparkles className="w-3 h-3" />
+                    AI Enhanced
+                  </div>
+                ) : (
+                  <div className="text-xs bg-gray-500/20 text-gray-700 px-2 py-1 rounded">
+                    Basic Only
+                  </div>
+                )}
               </div>
               <p className="text-sm text-muted-foreground">
                 {group.start.toFixed(1)}s - {group.end.toFixed(1)}s ({group.duration.toFixed(1)}s) • {groupLines.length} line(s)
@@ -362,6 +374,9 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
   const { project, updateScene, setProject } = useProject();
   const [expandedScenes, setExpandedScenes] = useState<Set<number>>(new Set());
   const [pickerScene, setPickerScene] = useState<SceneData | null>(null);
+  const [isEnhancing, setIsEnhancing] = useState(false);
+  const [enhancementProgress, setEnhancementProgress] = useState({ current: 0, total: 0 });
+  const [enhancementError, setEnhancementError] = useState<string | null>(null);
 
   if (!project) return null;
 
@@ -402,10 +417,86 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
     });
   };
 
+  const handleGenerateEnhancedPrompts = async () => {
+    if (!project.sceneGroups || !project.apiProvider || !project.apiKey) {
+      setEnhancementError("Missing project configuration");
+      return;
+    }
+
+    setIsEnhancing(true);
+    setEnhancementError(null);
+    setEnhancementProgress({ current: 0, total: project.sceneGroups.length });
+
+    try {
+      // Extract basic prompts
+      const basicPrompts = project.sceneGroups.map(group => group.prompt);
+
+      // Build theme context
+      const themeContext = {
+        sunoStyle: project.metadata.sunoStyleText || "",
+        genre: project.metadata.extractedStyleElements.genres.join(', '),
+        mood: project.metadata.extractedStyleElements.mood,
+      };
+
+      console.log('Starting prompt enhancement with theme context:', themeContext);
+
+      // Enhance prompts with progress tracking
+      const enhancedPrompts: string[] = [];
+      for (let i = 0; i < basicPrompts.length; i++) {
+        setEnhancementProgress({ current: i + 1, total: basicPrompts.length });
+
+        try {
+          const { enhancePromptWithAI } = await import("../lib/image-api");
+          const enhanced = await enhancePromptWithAI(
+            basicPrompts[i],
+            project.apiProvider,
+            project.apiKey,
+            themeContext
+          );
+          enhancedPrompts.push(enhanced);
+
+          // Small delay to avoid rate limiting
+          if (i < basicPrompts.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        } catch (error) {
+          console.error(`Failed to enhance prompt ${i + 1}:`, error);
+          // Use basic prompt as fallback
+          enhancedPrompts.push(basicPrompts[i]);
+        }
+      }
+
+      // Update project with enhanced prompts
+      const updatedGroups = project.sceneGroups.map((group, index) => ({
+        ...group,
+        enhancedPrompt: enhancedPrompts[index],
+        selectedPromptType: group.selectedPromptType || ("enhanced" as const),
+      }));
+
+      setProject({
+        ...project,
+        sceneGroups: updatedGroups,
+      });
+
+      console.log('Prompt enhancement complete!');
+    } catch (error) {
+      console.error('Enhancement error:', error);
+      setEnhancementError(error instanceof Error ? error.message : "Enhancement failed");
+    } finally {
+      setIsEnhancing(false);
+      setEnhancementProgress({ current: 0, total: 0 });
+    }
+  };
+
   const totalItems = usingGrouping ? (project.sceneGroups?.length || 0) : project.scenes.length;
   const uniqueImages = usingGrouping
     ? (project.sceneGroups?.filter(g => !g.isReusedGroup).length || 0)
     : project.scenes.length;
+
+  // Count how many scenes are missing enhanced prompts
+  const scenesWithoutEnhancement = usingGrouping
+    ? (project.sceneGroups?.filter(g => !g.enhancedPrompt).length || 0)
+    : 0;
 
   return (
     <div className="container max-w-6xl mx-auto py-8 px-4">
@@ -450,6 +541,52 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
           </div>
         </CardContent>
       </Card>
+
+      {/* AI Enhancement Button - Show if any scenes are missing enhanced prompts */}
+      {usingGrouping && scenesWithoutEnhancement > 0 && (
+        <Card className="mb-6 border-green-500/50 bg-green-500/5">
+          <CardContent className="pt-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles className="w-5 h-5 text-green-600" />
+                  <h3 className="font-semibold text-lg">AI Prompt Enhancement Available</h3>
+                </div>
+                <p className="text-sm text-muted-foreground mb-4">
+                  {scenesWithoutEnhancement === totalItems
+                    ? `Generate AI-enhanced prompts for all ${totalItems} scenes with rich visual details and theme consistency.`
+                    : `${scenesWithoutEnhancement} scene(s) don't have AI-enhanced prompts yet. Generate enhanced versions now.`
+                  }
+                </p>
+                {enhancementError && (
+                  <div className="p-3 bg-destructive/10 text-destructive rounded text-sm mb-4">
+                    {enhancementError}
+                  </div>
+                )}
+                {isEnhancing && (
+                  <div className="text-sm text-muted-foreground mb-4">
+                    Enhancing prompt {enhancementProgress.current} of {enhancementProgress.total}...
+                  </div>
+                )}
+              </div>
+              <Button
+                onClick={handleGenerateEnhancedPrompts}
+                disabled={isEnhancing}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {isEnhancing ? (
+                  <>Enhancing {enhancementProgress.current}/{enhancementProgress.total}...</>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Generate AI Enhanced Prompts
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Scene/Group List */}
       <div className="space-y-3 mb-6">

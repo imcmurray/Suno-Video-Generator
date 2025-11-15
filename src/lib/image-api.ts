@@ -297,7 +297,28 @@ Your enhanced descriptions should:
       });
 
       if (!response.ok) {
-        console.error('Prompt enhancement failed, using original prompt');
+        let errorMessage = `OpenAI API error (${response.status})`;
+        try {
+          const errorData = await response.json();
+          const message = errorData.error?.message || errorData.message || JSON.stringify(errorData);
+          errorMessage += `: ${message}`;
+
+          // Provide helpful context for common errors
+          if (response.status === 401) {
+            errorMessage = "Invalid OpenAI API key. Please check your API key.";
+          } else if (response.status === 429) {
+            errorMessage = "OpenAI rate limit exceeded. Please wait and try again.";
+          } else if (response.status === 500) {
+            errorMessage = "OpenAI server error. Please try again later.";
+          }
+
+          console.error('OpenAI prompt enhancement failed:', errorMessage);
+          console.error('Full error:', errorData);
+        } catch {
+          console.error('OpenAI prompt enhancement failed:', response.statusText);
+        }
+
+        // Return basic prompt as fallback (don't throw - graceful degradation)
         return basicPrompt;
       }
 
@@ -325,7 +346,28 @@ Your enhanced descriptions should:
       });
 
       if (!response.ok) {
-        console.error('Prompt enhancement failed, using original prompt');
+        let errorMessage = `Grok API error (${response.status})`;
+        try {
+          const errorData = await response.json();
+          const message = errorData.error?.message || errorData.message || JSON.stringify(errorData);
+          errorMessage += `: ${message}`;
+
+          // Provide helpful context for common errors
+          if (response.status === 401) {
+            errorMessage = "Invalid Grok API key. Please check your API key.";
+          } else if (response.status === 429) {
+            errorMessage = "Grok rate limit exceeded. Please wait and try again.";
+          } else if (response.status === 500) {
+            errorMessage = "Grok server error. Please try again later.";
+          }
+
+          console.error('Grok prompt enhancement failed:', errorMessage);
+          console.error('Full error:', errorData);
+        } catch {
+          console.error('Grok prompt enhancement failed:', response.statusText);
+        }
+
+        // Return basic prompt as fallback (don't throw - graceful degradation)
         return basicPrompt;
       }
 
