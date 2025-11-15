@@ -379,7 +379,7 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
   const [showStopping, setShowStopping] = useState(false); // State for UI only
   const [enhancementProgress, setEnhancementProgress] = useState({ current: 0, total: 0 });
   const [enhancementError, setEnhancementError] = useState<string | null>(null);
-  const [enhancementSuccess, setEnhancementSuccess] = useState<{ total: number; enhanced: number; failed: number } | null>(null);
+  const [enhancementSuccess, setEnhancementSuccess] = useState<{ total: number; enhanced: number; failed: number; skipped?: number } | null>(null);
 
   if (!project) return null;
 
@@ -436,11 +436,32 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
     setShowStopping(false); // Reset UI state
     setEnhancementError(null);
     setEnhancementSuccess(null);
-    setEnhancementProgress({ current: 0, total: project.sceneGroups.length });
-
     try {
-      // Extract basic prompts
-      const basicPrompts = project.sceneGroups.map(group => group.prompt);
+      // Filter to only groups that need enhancement (no enhancedPrompt yet)
+      const groupsToEnhance = project.sceneGroups
+        .map((group, index) => ({ group, index }))
+        .filter(({ group }) => !group.enhancedPrompt);
+
+      // Extract basic prompts only from groups that need enhancement
+      const basicPrompts = groupsToEnhance.map(({ group }) => group.prompt);
+      const groupIndices = groupsToEnhance.map(({ index }) => index);
+
+      const alreadyEnhanced = project.sceneGroups.length - basicPrompts.length;
+
+      console.log(`Groups to enhance: ${basicPrompts.length} (${alreadyEnhanced} already enhanced)`);
+
+      // Update progress with actual count to process
+      setEnhancementProgress({ current: 0, total: basicPrompts.length });
+
+      // If all groups are already enhanced, nothing to do
+      if (basicPrompts.length === 0) {
+        setEnhancementSuccess({
+          total: 0,
+          enhanced: 0,
+          failed: 0
+        });
+        return;
+      }
 
       // Build theme context
       const themeContext = {
@@ -478,13 +499,14 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
         }
 
         // Process batch in parallel
-        const batchPromises = batchIndices.map(async (index) => {
-          console.log(`Enhancing prompt ${index + 1}/${basicPrompts.length}...`);
-          console.log('Basic prompt:', basicPrompts[index]);
+        const batchPromises = batchIndices.map(async (batchLocalIndex) => {
+          const actualGroupIndex = groupIndices[batchLocalIndex]; // Map to actual scene group index
+          console.log(`Enhancing prompt ${batchLocalIndex + 1}/${basicPrompts.length} (scene group ${actualGroupIndex + 1})...`);
+          console.log('Basic prompt:', basicPrompts[batchLocalIndex]);
 
           try {
             const enhanced = await enhancePromptWithAI(
-              basicPrompts[index],
+              basicPrompts[batchLocalIndex],
               project.apiProvider!,
               project.apiKey!,
               themeContext
@@ -493,16 +515,16 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
             console.log('Enhanced prompt received:', enhanced);
 
             // Check if enhancement actually changed the prompt
-            if (enhanced !== basicPrompts[index]) {
+            if (enhanced !== basicPrompts[batchLocalIndex]) {
               console.log('✓ Prompt was enhanced (different from basic)');
-              return { index, enhanced, success: true };
+              return { index: actualGroupIndex, batchIndex: batchLocalIndex, enhanced, success: true };
             } else {
               console.log('✗ Prompt unchanged (enhancement failed or returned same)');
-              return { index, enhanced, success: false };
+              return { index: actualGroupIndex, batchIndex: batchLocalIndex, enhanced, success: false };
             }
           } catch (error) {
-            console.error(`✗ Failed to enhance prompt ${index + 1}:`, error);
-            return { index, enhanced: basicPrompts[index], success: false };
+            console.error(`✗ Failed to enhance prompt ${batchLocalIndex + 1}:`, error);
+            return { index: actualGroupIndex, batchIndex: batchLocalIndex, enhanced: basicPrompts[batchLocalIndex], success: false };
           }
         });
 
@@ -512,22 +534,22 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
         // Accumulate all updates from this batch
         const groupUpdates: Record<number, { enhancedPrompt: string; selectedPromptType: "enhanced" }> = {};
 
-        batchResults.forEach(({ index, enhanced, success }) => {
+        batchResults.forEach(({ index, batchIndex, enhanced, success }) => {
           if (success) {
             successCount++;
           } else {
             fallbackCount++;
           }
 
-          // Accumulate update
+          // Accumulate update using actual group index
           groupUpdates[index] = {
             enhancedPrompt: enhanced,
             selectedPromptType: "enhanced" as const,
           };
 
-          // Update progress
+          // Update progress using batch index
           setEnhancementProgress({
-            current: index + 1,
+            current: batchIndex + 1,
             total: basicPrompts.length,
           });
         });
@@ -564,7 +586,8 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
       setEnhancementSuccess({
         total: basicPrompts.length,
         enhanced: successCount,
-        failed: fallbackCount
+        failed: fallbackCount,
+        skipped: alreadyEnhanced
       });
     } catch (error) {
       console.error('Enhancement error:', error);
@@ -644,7 +667,7 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                 <p className="text-sm text-muted-foreground mb-4">
                   {scenesWithoutEnhancement === totalItems
                     ? `Generate AI-enhanced prompts for all ${totalItems} scenes with rich visual details and theme consistency.`
-                    : `${scenesWithoutEnhancement} scene(s) don't have AI-enhanced prompts yet. Generate enhanced versions now.`
+                    : `${totalItems - scenesWithoutEnhancement} of ${totalItems} scene(s) already enhanced. Will enhance the remaining ${scenesWithoutEnhancement} scene(s).`
                   }
                 </p>
                 {enhancementError && (
@@ -654,8 +677,16 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                 )}
                 {enhancementSuccess && (
                   <div className="p-3 bg-green-500/10 text-green-700 rounded text-sm mb-4">
-                    ✓ Enhancement complete! {enhancementSuccess.enhanced} of {enhancementSuccess.total} prompts successfully enhanced.
-                    {enhancementSuccess.failed > 0 && ` (${enhancementSuccess.failed} fell back to basic)`}
+                    {enhancementSuccess.total === 0
+                      ? "✓ All prompts are already enhanced! No new prompts to process."
+                      : (
+                        <>
+                          ✓ Enhancement complete! {enhancementSuccess.enhanced} of {enhancementSuccess.total} prompts successfully enhanced.
+                          {enhancementSuccess.skipped && enhancementSuccess.skipped > 0 && ` (${enhancementSuccess.skipped} already enhanced, skipped)`}
+                          {enhancementSuccess.failed > 0 && ` (${enhancementSuccess.failed} fell back to basic)`}
+                        </>
+                      )
+                    }
                   </div>
                 )}
                 {isEnhancing && (
@@ -675,7 +706,10 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4 mr-2" />
-                      Generate AI Enhanced Prompts
+                      {scenesWithoutEnhancement === totalItems
+                        ? "Generate AI Enhanced Prompts"
+                        : `Enhance Remaining ${scenesWithoutEnhancement} Prompt${scenesWithoutEnhancement === 1 ? '' : 's'}`
+                      }
                     </>
                   )}
                 </Button>
