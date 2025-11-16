@@ -1,6 +1,24 @@
 import React from "react";
 import { AbsoluteFill, Img, Video, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
-import { SceneGroupProps } from "../types";
+import { SceneGroupProps, SceneGroup as SceneGroupType } from "../types";
+
+// Helper to determine media type from MediaVersions array (works with blob URLs)
+const getMediaType = (sceneGroup: SceneGroupType): 'image' | 'video' => {
+  if (!sceneGroup.imagePath) return 'image';
+
+  // Check MediaVersions array for the media type
+  const version = sceneGroup.mediaVersions?.find(v => v.path === sceneGroup.imagePath);
+  if (version) {
+    return version.type;
+  }
+
+  // Fallback: check file extension for backwards compatibility
+  if (/\.(mp4|mov|webm)$/i.test(sceneGroup.imagePath)) {
+    return 'video';
+  }
+
+  return 'image';
+};
 
 export const SceneGroup: React.FC<SceneGroupProps> = ({
   sceneGroup,
@@ -53,8 +71,8 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
     }
   );
 
-  // Check if the media is a video file
-  const isVideo = sceneGroup.imagePath && /\.(mp4|mov|webm)$/i.test(sceneGroup.imagePath);
+  // Check if the media is a video file using MediaVersions metadata
+  const isVideo = getMediaType(sceneGroup) === 'video';
 
   // Calculate current time and find active lyric line
   const currentTime = sceneGroup.start + (frame / fps);
@@ -81,7 +99,7 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
             <Video
               src={sceneGroup.imagePath}
               loop={shouldLoop}
-              muted={false} // Keep audio from video if present
+              muted={true} // Mute video audio - only play song audio
               style={{
                 width: "100%",
                 height: "100%",

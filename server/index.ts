@@ -11,6 +11,9 @@ const PORT = process.env.PORT || 3002;
 app.use(cors({
   origin: "http://localhost:3001", // Vite dev server
   credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'], // Explicitly allow these methods
+  allowedHeaders: ['Content-Type'], // Allow Content-Type header
+  optionsSuccessStatus: 200 // For legacy browsers and Express 5 compatibility
 }));
 app.use(express.json({ limit: "100mb" })); // Support large audio files as data URIs
 app.use(express.urlencoded({ extended: true, limit: "100mb" }));

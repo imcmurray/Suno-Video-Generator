@@ -117,13 +117,75 @@ export const VideoPreview: React.FC = () => {
     setRenderJobId(null);
 
     try {
-      // Create FormData to send audio file to backend
+      // Create FormData to send audio file and media files to backend
       const formData = new FormData();
       formData.append("audioFile", project.audioFile);
-      formData.append("scenes", JSON.stringify(project.scenes));
+
+      // Upload media files from sceneGroups
+      if (usingGrouping && project.sceneGroups) {
+        console.log("Collecting media files from scene groups...");
+
+        for (const group of project.sceneGroups) {
+          // Skip reused groups - they'll reference the original group's media
+          if (group.isReusedGroup) continue;
+
+          if (group.imagePath) {
+            try {
+              // Fetch the blob URL and convert to File
+              const response = await fetch(group.imagePath);
+              const blob = await response.blob();
+
+              // Determine file extension based on media type
+              const activeVersion = group.mediaVersions?.find(v => v.id === group.activeMediaId);
+              const isVideo = activeVersion?.type === 'video';
+              const extension = isVideo ? 'mp4' : 'jpg';
+              const filename = `${group.filename || `group_${group.id}`}.${extension}`;
+
+              const file = new File([blob], filename, { type: blob.type });
+
+              // Upload with a unique key
+              const fileKey = `media_${group.id}`;
+              formData.append(fileKey, file);
+              console.log(`Added ${isVideo ? 'video' : 'image'}: ${fileKey} (${filename})`);
+            } catch (error) {
+              console.error(`Failed to upload media for group ${group.id}:`, error);
+            }
+          }
+        }
+
+        // Send sceneGroups metadata (without blob URLs, use file keys instead)
+        const sceneGroupsForBackend = project.sceneGroups.map(group => ({
+          id: group.id,
+          lyricLineIds: group.lyricLineIds,
+          start: group.start,
+          end: group.end,
+          duration: group.duration,
+          combinedLyrics: group.combinedLyrics,
+          prompt: group.prompt,
+          filename: group.filename,
+          isReusedGroup: group.isReusedGroup,
+          originalGroupId: group.originalGroupId,
+          isInstrumental: group.isInstrumental,
+          // Add media file key for backend to map
+          mediaFileKey: group.isReusedGroup ? undefined : `media_${group.id}`,
+          // Include media type metadata for correct rendering
+          mediaVersions: group.mediaVersions,
+          activeMediaId: group.activeMediaId,
+        }));
+
+        formData.append("sceneGroups", JSON.stringify(sceneGroupsForBackend));
+        formData.append("lyricLines", JSON.stringify(project.lyricLines));
+        formData.append("useGrouping", "true");
+        console.log(`Prepared ${sceneGroupsForBackend.length} scene groups for render`);
+      } else {
+        // Legacy mode: send scenes (backward compatibility)
+        formData.append("scenes", JSON.stringify(project.scenes));
+      }
+
       formData.append("metadata", JSON.stringify(project.metadata));
 
       // Start render job
+      console.log("Starting render job...");
       const response = await fetch("http://localhost:3002/api/render", {
         method: "POST",
         body: formData, // Send as multipart/form-data

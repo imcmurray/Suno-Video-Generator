@@ -14,6 +14,13 @@ export async function saveProject(project: ProjectState): Promise<void> {
       // Don't save blob URLs, they won't work after reload
       imagePath: scene.imagePath?.startsWith("blob:") ? undefined : scene.imagePath,
     })),
+    lyricLines: project.lyricLines,
+    useGrouping: project.useGrouping,
+    sceneGroups: project.sceneGroups?.map((group) => ({
+      ...group,
+      // Don't save blob URLs, they won't work after reload
+      imagePath: group.imagePath?.startsWith("blob:") ? undefined : group.imagePath,
+    })),
     apiProvider: project.apiProvider,
     imageGenerationProgress: project.imageGenerationProgress,
   };

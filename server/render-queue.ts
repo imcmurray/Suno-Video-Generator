@@ -14,6 +14,9 @@ export interface RenderJob {
 export interface RenderJobInput {
   audioPath: string;
   scenes: any[];
+  sceneGroups?: any[];
+  lyricLines?: any[];
+  useGrouping?: boolean;
   metadata: any;
 }
 

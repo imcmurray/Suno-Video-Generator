@@ -168,12 +168,38 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
 
       setLoadingStatus("Restoring project...");
 
+      // Transform imported data based on format
+      // exportPrompts() creates "groups" with snake_case fields
+      // saveProject() creates "sceneGroups" with camelCase fields
+      let sceneGroups = importedData.sceneGroups;
+
+      if (importedData.groups && !importedData.sceneGroups) {
+        // Transform exportPrompts format to internal format
+        sceneGroups = importedData.groups.map((group: any) => ({
+          id: group.id,
+          lyricLineIds: group.lyric_line_ids || group.lyricLineIds,
+          start: group.start,
+          end: group.end,
+          duration: group.duration,
+          combinedLyrics: group.combined_lyrics || group.combinedLyrics,
+          prompt: group.prompt_basic || group.prompt,
+          enhancedPrompt: group.prompt_enhanced || group.enhancedPrompt,
+          customPrompt: group.prompt_custom || group.customPrompt,
+          selectedPromptType: group.selected_prompt_type || group.selectedPromptType || "basic",
+          filename: group.filename,
+          isReusedGroup: group.is_reused_group || group.isReusedGroup,
+          originalGroupId: group.original_group_id || group.originalGroupId,
+          isInstrumental: group.is_instrumental || group.isInstrumental,
+          isGap: group.is_gap || group.isGap,
+        }));
+      }
+
       // Create project state from imported data
       setProject({
         metadata: importedData.metadata,
         scenes: importedData.scenes || [],
         lyricLines: importedData.lyricLines,
-        sceneGroups: importedData.sceneGroups,
+        sceneGroups: sceneGroups,
         useGrouping: importedData.useGrouping,
         audioFile: files.audio, // User must provide audio
         srtFile: files.project, // Use project file as placeholder

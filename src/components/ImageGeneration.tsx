@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Image as ImageIcon, CheckCircle2, XCircle, Loader2, Play, Pause, Link2, Video as VideoIcon, RefreshCw, Download, Upload, Edit3 } from "lucide-react";
+import { Image as ImageIcon, CheckCircle2, XCircle, Loader2, Play, Pause, Link2, Video as VideoIcon, RefreshCw, Download, Upload, Edit3, Copy } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Progress } from "./ui/progress";
@@ -98,8 +98,35 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
     });
   };
 
-  // Helper to check if a path is a video file
-  const isVideoFile = (path: string): boolean => {
+  // Helper to get media type for a given path by checking MediaVersions
+  const getMediaType = (groupId: string, mediaPath: string): 'image' | 'video' | null => {
+    const group = project?.sceneGroups?.find(g => g.id === groupId);
+    if (!group || !mediaPath) return null;
+
+    // Check MediaVersions array for the media type
+    const version = group.mediaVersions?.find(v => v.path === mediaPath);
+    if (version) {
+      return version.type;
+    }
+
+    // Fallback: check file extension for backwards compatibility
+    if (/\.(mp4|mov|webm)$/i.test(mediaPath)) {
+      return 'video';
+    }
+    if (/\.(jpg|jpeg|png|webp|gif)$/i.test(mediaPath)) {
+      return 'image';
+    }
+
+    return null;
+  };
+
+  // Legacy helper - kept for backwards compatibility but uses getMediaType internally
+  const isVideoFile = (path: string, groupId?: string): boolean => {
+    if (groupId) {
+      const mediaType = getMediaType(groupId, path);
+      return mediaType === 'video';
+    }
+    // Fallback to extension check if no groupId provided
     return /\.(mp4|mov|webm)$/i.test(path);
   };
 
@@ -556,11 +583,24 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
 
     const files = Array.from(e.dataTransfer.files);
     const videoFile = files.find(f => f.type.startsWith('video/'));
+    const imageFile = files.find(f => f.type.startsWith('image/'));
 
     if (videoFile) {
       await handleImportVideo(groupId, videoFile);
+    } else if (imageFile) {
+      // Handle image drop - create synthetic event for handler
+      const imageUrl = URL.createObjectURL(imageFile);
+      const group = project?.sceneGroups?.find(g => g.id === groupId);
+      const imageCount = group?.mediaVersions?.filter(v => v.type === 'image').length || 0;
+      const label = imageCount === 0 ? 'Original Image' : `Image v${imageCount + 1}`;
+
+      addMediaVersion(groupId, imageUrl, 'image', label);
+      updateStatus(groupId, {
+        status: 'completed',
+        imageUrl: imageUrl,
+      });
     } else {
-      alert('Please drop a video file');
+      alert('Please drop an image or video file');
     }
   };
 
@@ -638,6 +678,22 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
     setEditedPrompt("");
   };
 
+  const handleCopyPrompt = async (groupId: string) => {
+    const group = project?.sceneGroups?.find(g => g.id === groupId);
+    if (!group) return;
+
+    const promptToCopy = getSelectedPrompt(group);
+
+    try {
+      await navigator.clipboard.writeText(promptToCopy);
+      // TODO: Could add toast notification for better UX
+      console.log('Prompt copied to clipboard');
+    } catch (error) {
+      console.error('Failed to copy prompt:', error);
+      alert('Failed to copy prompt to clipboard');
+    }
+  };
+
   // Modal handlers
   const handleOpenModal = (groupId: string) => {
     console.log('handleOpenModal called for group:', groupId);
@@ -671,6 +727,30 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
     const file = e.target.files?.[0];
     if (file && file.type.startsWith('video/')) {
       await handleImportVideo(groupId, file);
+    }
+    // Reset input
+    e.target.value = '';
+  };
+
+  const handleImageFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>, groupId: string) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      // Create blob URL for the uploaded image
+      const imageUrl = URL.createObjectURL(file);
+
+      // Count existing images for label
+      const group = project?.sceneGroups?.find(g => g.id === groupId);
+      const imageCount = group?.mediaVersions?.filter(v => v.type === 'image').length || 0;
+      const label = imageCount === 0 ? 'Original Image' : `Image v${imageCount + 1}`;
+
+      // Add as new media version
+      addMediaVersion(groupId, imageUrl, 'image', label);
+
+      // Update status to show new image
+      updateStatus(groupId, {
+        status: 'completed',
+        imageUrl: imageUrl,
+      });
     }
     // Reset input
     e.target.value = '';
@@ -828,7 +908,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
                     <div className="absolute inset-0 flex items-center justify-center bg-blue-500/10 backdrop-blur-sm rounded-lg z-10">
                       <div className="text-blue-700 font-semibold flex items-center gap-2">
                         <Upload size={24} />
-                        Drop video here
+                        Drop image or video here
                       </div>
                     </div>
                   )}
@@ -907,6 +987,21 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
                         </div>
                       )}
 
+                      {/* Copy Prompt Button - Always Visible */}
+                      {!group.isReusedGroup && (
+                        <div className="mt-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full"
+                            onClick={() => handleCopyPrompt(group.id)}
+                          >
+                            <Copy className="w-3 h-3 mr-1" />
+                            Copy Prompt
+                          </Button>
+                        </div>
+                      )}
+
                       {/* Media Preview */}
                       {status.imageUrl && !isEditing && (
                         <div className="mt-2 space-y-2">
@@ -914,14 +1009,14 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
                             className="relative w-full h-20 rounded overflow-hidden border cursor-pointer hover:opacity-90 transition-opacity"
                             onClick={() => {
                               console.log('Image clicked! group:', group.id);
-                              console.log('isVideoFile:', isVideoFile(status.imageUrl!));
+                              console.log('isVideoFile:', isVideoFile(status.imageUrl!, group.id));
                               console.log('status.imageUrl:', status.imageUrl);
-                              if (!isVideoFile(status.imageUrl!)) {
+                              if (!isVideoFile(status.imageUrl!, group.id)) {
                                 handleOpenModal(group.id);
                               }
                             }}
                           >
-                            {isVideoFile(status.imageUrl) ? (
+                            {isVideoFile(status.imageUrl, group.id) ? (
                               <video
                                 src={status.imageUrl}
                                 className="w-full h-full object-cover"
@@ -937,12 +1032,12 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
                                 className="w-full h-full object-cover"
                               />
                             )}
-                            {isVideoFile(status.imageUrl) && activeVersion?.quality && (
+                            {isVideoFile(status.imageUrl, group.id) && activeVersion?.quality && (
                               <div className="absolute top-1 right-1 bg-purple-600 text-white px-1.5 py-0.5 rounded text-xs font-semibold">
                                 {activeVersion.quality} VIDEO
                               </div>
                             )}
-                            {!isVideoFile(status.imageUrl) && (
+                            {!isVideoFile(status.imageUrl, group.id) && (
                               <div className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/20 transition-colors">
                                 <span className="text-white text-xs opacity-0 hover:opacity-100">Click to view full size</span>
                               </div>
@@ -969,28 +1064,6 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
                               >
                                 <Edit3 className="w-3 h-3 mr-1" />
                                 Edit Prompt
-                              </Button>
-                            </div>
-                          )}
-
-                          {/* Import Video Button */}
-                          {status.status === "completed" && !group.isReusedGroup && (
-                            <div>
-                              <input
-                                type="file"
-                                id={`video-input-${group.id}`}
-                                accept="video/*"
-                                className="hidden"
-                                onChange={(e) => handleFileInputChange(e, group.id)}
-                              />
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="w-full"
-                                onClick={() => document.getElementById(`video-input-${group.id}`)?.click()}
-                              >
-                                <Upload className="w-3 h-3 mr-1" />
-                                Import Video (SD/HD)
                               </Button>
                             </div>
                           )}
@@ -1046,6 +1119,62 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
                               </div>
                             </div>
                           )}
+                        </div>
+                      )}
+
+                      {/* Import Media Buttons - Always Visible */}
+                      {!group.isReusedGroup && (
+                        <div className="mt-2 space-y-2">
+                          {/* Drag & Drop Hint */}
+                          {!status.imageUrl && (
+                            <div className="p-3 bg-muted/30 border-2 border-dashed border-muted-foreground/20 rounded text-center">
+                              <p className="text-xs text-muted-foreground">
+                                Drag & drop an image or video here, or use the buttons below
+                              </p>
+                            </div>
+                          )}
+
+                          <div className="flex gap-2">
+                            {/* Import Image Button */}
+                            <div className="flex-1">
+                              <input
+                                type="file"
+                                id={`image-input-${group.id}`}
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => handleImageFileInputChange(e, group.id)}
+                              />
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="w-full"
+                                onClick={() => document.getElementById(`image-input-${group.id}`)?.click()}
+                              >
+                                <Upload className="w-3 h-3 mr-1" />
+                                Import Image
+                              </Button>
+                            </div>
+
+                            {/* Import Video Button */}
+                            <div className="flex-1">
+                              <input
+                                type="file"
+                                id={`video-input-${group.id}`}
+                                accept="video/*"
+                                className="hidden"
+                                onChange={(e) => handleFileInputChange(e, group.id)}
+                              />
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="w-full"
+                                onClick={() => document.getElementById(`video-input-${group.id}`)?.click()}
+                              >
+                                <Upload className="w-3 h-3 mr-1" />
+                                Import Video
+                              </Button>
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>

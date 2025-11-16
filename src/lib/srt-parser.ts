@@ -297,6 +297,9 @@ export function generateImagePrompt(
   // 4. Technical specs only (no repetitive base style or mood)
   promptParts.push("high quality, cinematic");
 
+  // 5. Anti-singing restrictions (prevent lip sync issues)
+  promptParts.push("NO singing, NO open mouths, NO microphones, NO performance poses");
+
   // Combine everything
   const prompt = promptParts.join(" | ");
 

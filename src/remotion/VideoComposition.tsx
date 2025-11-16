@@ -27,8 +27,8 @@ export const VideoComposition = ({
       {/* Audio track */}
       {audioPath && (
         <>
-          <Audio src={audioPath} volume={1.0} />
-          {console.log("✓ Audio component rendered with volume 1.0")}
+          <Audio src={audioPath} volume={1.0} startFrom={0} />
+          {console.log("✓ Audio component rendered with volume 1.0, startFrom 0")}
         </>
       )}
       {!audioPath && console.error("✗ No audioPath provided to VideoComposition")}

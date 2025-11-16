@@ -255,7 +255,18 @@ Your enhanced descriptions should:
 - Add lighting, atmosphere, and mood descriptions
 - Maintain all original style keywords and themes
 - Be concise but visually rich (under 100 words)
-- Focus on what can be visually depicted in a single image`;
+- Focus on what can be visually depicted in a single image
+
+CRITICAL RESTRICTIONS - You MUST follow these rules:
+1. NEVER depict people singing, performing, or with open mouths
+2. AVOID microphones, stages, performance venues, or concert imagery
+3. If people must appear, show them in:
+   - Contemplative poses (looking away, thoughtful expressions)
+   - Observational roles (watching scenery, silhouettes)
+   - Ambient presence (background figures, environmental integration)
+   - ALWAYS with closed mouths and neutral expressions
+4. Prefer abstract, environmental, or symbolic imagery over direct human depiction
+5. When lyrics mention singing/music, interpret metaphorically through visual metaphors (light waves, color patterns, natural phenomena) rather than literal performers`;
 
   // Add theme context if provided
   if (themeContext) {
@@ -738,29 +749,46 @@ export async function detectVideoQuality(
   return new Promise((resolve) => {
     const video = document.createElement("video");
     const url = URL.createObjectURL(file);
+    let resolved = false;
+
+    // Ensure we only resolve once
+    const resolveOnce = (quality: "SD" | "HD") => {
+      if (!resolved) {
+        resolved = true;
+        URL.revokeObjectURL(url);
+        resolve(quality);
+      }
+    };
+
+    // Timeout after 5 seconds if metadata doesn't load
+    setTimeout(() => {
+      if (!resolved) {
+        console.warn("Video metadata loading timeout, falling back to file size");
+        const sizeMB = file.size / (1024 * 1024);
+        resolveOnce(sizeMB >= 2.5 ? "HD" : "SD");
+      }
+    }, 5000);
 
     video.onloadedmetadata = () => {
-      URL.revokeObjectURL(url);
-
       // Check resolution (height)
-      // SD: 720p or lower, HD: 1080p or higher
-      if (video.videoHeight >= 1080) {
-        resolve("HD");
+      // Grok SD: 464p, Grok HD: 928p
+      // Threshold: 700p works for Grok and standard resolutions (720p, 1080p, etc.)
+      if (video.videoHeight >= 700) {
+        resolveOnce("HD");
       } else if (video.videoHeight > 0) {
-        resolve("SD");
+        resolveOnce("SD");
       } else {
         // Fallback to file size if resolution unavailable
-        // SD: < 50MB, HD: >= 50MB
+        // Grok SD: ~1.8MB, Grok HD: ~3.1MB (6-second videos)
         const sizeMB = file.size / (1024 * 1024);
-        resolve(sizeMB >= 50 ? "HD" : "SD");
+        resolveOnce(sizeMB >= 2.5 ? "HD" : "SD");
       }
     };
 
     video.onerror = () => {
-      URL.revokeObjectURL(url);
       // Fallback to file size on error
       const sizeMB = file.size / (1024 * 1024);
-      resolve(sizeMB >= 50 ? "HD" : "SD");
+      resolveOnce(sizeMB >= 2.5 ? "HD" : "SD");
     };
 
     video.src = url;

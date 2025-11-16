@@ -24,34 +24,113 @@ if (!fs.existsSync(uploadsDir)) {
  * POST /api/render
  * Create a new render job
  */
-router.post("/render", upload.single("audioFile"), async (req: Request, res: Response) => {
+router.post("/render", upload.any(), async (req: Request, res: Response) => {
   try {
-    const { scenes, metadata } = req.body;
-    const audioFile = req.file;
+    const { scenes, sceneGroups, lyricLines, metadata, useGrouping } = req.body;
+    const files = req.files as Express.Multer.File[];
 
+    // Find audio file
+    const audioFile = files.find(f => f.fieldname === "audioFile");
     if (!audioFile) {
       return res.status(400).json({
         error: "Missing audio file",
       });
     }
 
-    if (!scenes) {
-      return res.status(400).json({
-        error: "Missing scenes data",
+    // Create file map: fieldname -> server HTTP URL
+    const fileUrlMap = new Map<string, string>();
+    files.forEach(file => {
+      const filename = path.basename(file.path);
+      const url = `http://localhost:3002/uploads/${filename}`;
+      fileUrlMap.set(file.fieldname, url);
+      console.log(`Uploaded file: ${file.fieldname} -> ${url}`);
+    });
+
+    let inputProps: any;
+
+    if (useGrouping === "true" && sceneGroups) {
+      // Grouping mode: process scene groups
+      const parsedGroups = JSON.parse(sceneGroups);
+      const parsedLines = JSON.parse(lyricLines);
+
+      console.log(`Processing ${parsedGroups.length} scene groups for render`);
+
+      // Replace media file keys with server HTTP URLs
+      const groupsWithUrls = parsedGroups.map((group: any) => {
+        if (group.mediaFileKey) {
+          // Get server URL for this group's media
+          const url = fileUrlMap.get(group.mediaFileKey);
+          if (url) {
+            console.log(`Group ${group.id}: ${group.mediaFileKey} -> ${url}`);
+
+            // Update mediaVersions array to use server URL instead of blob URL
+            const updatedMediaVersions = group.mediaVersions?.map((version: any) => {
+              // If this version's path matches the active media, update it to server URL
+              if (version.id === group.activeMediaId) {
+                return { ...version, path: url };
+              }
+              return version;
+            });
+
+            return {
+              ...group,
+              imagePath: url,
+              mediaFileKey: undefined,
+              mediaVersions: updatedMediaVersions
+            };
+          } else {
+            console.warn(`No uploaded file found for ${group.mediaFileKey}`);
+            return group;
+          }
+        } else if (group.isReusedGroup && group.originalGroupId) {
+          // Reused group: copy imagePath from original group
+          const originalGroup = parsedGroups.find((g: any) => g.id === group.originalGroupId);
+          if (originalGroup) {
+            const originalUrl = fileUrlMap.get(`media_${originalGroup.id}`);
+            console.log(`Reused group ${group.id}: copying from ${group.originalGroupId} -> ${originalUrl}`);
+
+            // Update mediaVersions for reused group
+            const updatedMediaVersions = group.mediaVersions?.map((version: any) => {
+              if (version.id === group.activeMediaId) {
+                return { ...version, path: originalUrl };
+              }
+              return version;
+            });
+
+            return {
+              ...group,
+              imagePath: originalUrl,
+              mediaVersions: updatedMediaVersions
+            };
+          }
+        }
+        return group;
       });
+
+      inputProps = {
+        scenes: [], // Empty for backward compatibility
+        sceneGroups: groupsWithUrls,
+        lyricLines: parsedLines,
+        useGrouping: true,
+        audioPath: `http://localhost:3002/uploads/${path.basename(audioFile.path)}`,
+      };
+    } else {
+      // Legacy mode: process scenes
+      const parsedScenes = JSON.parse(scenes || "[]");
+      inputProps = {
+        scenes: parsedScenes,
+        audioPath: `http://localhost:3002/uploads/${path.basename(audioFile.path)}`,
+      };
     }
 
-    // Parse JSON fields
-    const parsedScenes = JSON.parse(scenes);
     const parsedMetadata = metadata ? JSON.parse(metadata) : {};
 
-    // Convert file path to URL for Remotion
-    const filename = path.basename(audioFile.path);
-    const audioUrl = `http://localhost:3002/uploads/${filename}`;
-
     const input: RenderJobInput = {
-      audioPath: audioUrl, // Use HTTP URL for Remotion
-      scenes: parsedScenes,
+      audioPath: inputProps.audioPath,
+      scenes: inputProps.scenes || [],
+      sceneGroups: inputProps.sceneGroups,
+      lyricLines: inputProps.lyricLines,
+      useGrouping: inputProps.useGrouping,
       metadata: {
         ...parsedMetadata,
         _tempAudioFilePath: audioFile.path, // Store original path for cleanup

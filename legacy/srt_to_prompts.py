@@ -182,7 +182,10 @@ def generate_image_prompt(lyric_text, suno_style="", style_elements=None, base_s
     
     # Technical specs
     prompt_parts.append("16:9 aspect ratio, high quality, cinematic composition")
-    
+
+    # Anti-singing restrictions (prevent lip sync issues)
+    prompt_parts.append("NO singing, NO open mouths, NO microphones, NO performance poses")
+
     # Combine everything
     prompt = " | ".join(prompt_parts)
     
