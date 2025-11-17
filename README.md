@@ -26,14 +26,22 @@ Transform your Suno AI-generated songs into professional HD music videos with AI
 # Install dependencies
 npm install
 
-# Run the web app
-npm run web
+# Run the full development environment (recommended)
+npm run dev:all
 
-# Or run Remotion studio (for video composition only)
-npm run dev
+# This starts both:
+# - Web app (Vite) on http://localhost:3001
+# - Render server (Express) on http://localhost:3002
 ```
 
-The web app will start at **http://localhost:3001**
+Or run individually:
+```bash
+# Web app only
+npm run web
+
+# Remotion studio (for video composition only)
+npm run dev
+```
 
 ## 📖 Usage
 
@@ -162,12 +170,26 @@ Generation time: ~2-3 minutes per image
 ### Run Development Servers
 
 ```bash
-# Web app (Vite)
+# Full-stack development (recommended)
+npm run dev:all
+
+# This runs both:
+# - Web app (Vite) on http://localhost:3001
+# - Render server (Express) on http://localhost:3002
+
+# Or run individually:
+
+# Web app only (port 3001)
 npm run web
 
-# Remotion studio
+# Render server only (port 3002)
+npm run server
+
+# Remotion studio only (port 3000)
 npm run dev
 ```
+
+The web app communicates with the render server for video processing and file uploads.
 
 ### Build for Production
 
@@ -218,7 +240,9 @@ Between scenes, you can add crossfade effects using Remotion's transition utilit
 
 | Command | Description |
 |---------|-------------|
-| `npm run web` | Start web app dev server (port 3001) |
+| `npm run dev:all` | **Start both web app (port 3001) and render server (port 3002)** |
+| `npm run web` | Start web app dev server only (port 3001) |
+| `npm run server` | Start render server only (port 3002) |
 | `npm run dev` | Start Remotion studio (port 3000) |
 | `npm run build:web` | Build web app for production |
 | `npm run build` | Render video with Remotion CLI |

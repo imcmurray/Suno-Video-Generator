@@ -4,6 +4,7 @@
   "description": "Automated pipeline for creating professional HD music videos from Suno AI-generated songs",
   "scripts": {
     "dev": "remotion studio",
+    "dev:all": "concurrently \"npm run web\" \"npm run server\"",
     "web": "vite",
     "server": "tsx watch server/index.ts",
     "build": "remotion render",
@@ -49,6 +50,7 @@
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^5.1.0",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^9.2.1",
     "postcss": "^8.4.47",
     "prettier": "^3.3.3",
     "prettier-plugin-tailwindcss": "^0.6.8",
