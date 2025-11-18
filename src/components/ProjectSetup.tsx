@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Upload, FileAudio, FileText, Sparkles, FileJson } from "lucide-react";
+import { Upload, FileAudio, FileText, Sparkles, FileJson, FileArchive } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
@@ -7,16 +7,17 @@ import { Label } from "./ui/label";
 import { useProject } from "../lib/project-context";
 import { srtToProjectData } from "../lib/srt-parser";
 import { estimateCost, APIProvider, enhanceAllPromptsWithTheme } from "../lib/image-api";
-import { loadProject } from "../lib/project-storage";
+import { loadProject, importCompleteProject } from "../lib/project-storage";
 
 export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
   const { setProject, setApiConfig } = useProject();
-  const [mode, setMode] = useState<"create" | "import">("create");
+  const [mode, setMode] = useState<"create" | "import" | "import-complete">("create");
   const [files, setFiles] = useState<{
     srt?: File;
     audio?: File;
     sunoStyle?: File;
     project?: File;
+    completeProject?: File;
   }>({});
   const [apiProvider, setApiProvider] = useState<APIProvider>("openai");
   const [apiKey, setApiKey] = useState("");
@@ -25,7 +26,7 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
   const [loadingStatus, setLoadingStatus] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
-  const handleFileChange = (type: "srt" | "audio" | "sunoStyle" | "project") => (
+  const handleFileChange = (type: "srt" | "audio" | "sunoStyle" | "project" | "completeProject") => (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = e.target.files?.[0];
@@ -191,6 +192,18 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
           originalGroupId: group.original_group_id || group.originalGroupId,
           isInstrumental: group.is_instrumental || group.isInstrumental,
           isGap: group.is_gap || group.isGap,
+          // Image/media data
+          imagePath: group.image_path || group.imagePath,
+          mediaVersions: group.media_versions ? group.media_versions.map((v: any) => ({
+            id: v.id,
+            type: v.type,
+            path: v.path,
+            createdAt: v.created_at || v.createdAt,
+            label: v.label,
+            quality: v.quality,
+            exported: v.exported,
+          })) : group.mediaVersions,
+          activeMediaId: group.active_media_id || group.activeMediaId,
         }));
       }
 
@@ -228,6 +241,66 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
     }
   };
 
+  const handleImportCompleteProject = async () => {
+    if (!files.completeProject) {
+      setError("Please upload a complete project ZIP file");
+      return;
+    }
+
+    if (!apiKey) {
+      setError("Please enter your API key");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Load complete project ZIP
+      setLoadingStatus("Loading complete project...");
+      const { project: importedData, audioFile } = await importCompleteProject(files.completeProject);
+
+      // Validate structure
+      if (!importedData.metadata || !importedData.scenes) {
+        throw new Error("Invalid project file - missing required data");
+      }
+
+      setLoadingStatus("Restoring project...");
+
+      // Create project state from imported data
+      setProject({
+        metadata: importedData.metadata,
+        scenes: importedData.scenes || [],
+        lyricLines: importedData.lyricLines,
+        sceneGroups: importedData.sceneGroups,
+        useGrouping: importedData.useGrouping,
+        audioFile: audioFile, // Audio from ZIP
+        srtFile: files.completeProject, // Use ZIP file as placeholder
+        apiProvider: apiProvider, // User can override
+        apiKey, // User must provide API key
+        imageGenerationProgress: importedData.imageGenerationProgress || {
+          total: importedData.scenes?.length || 0,
+          completed: 0,
+          failed: 0,
+        },
+      });
+
+      setApiConfig(apiProvider, apiKey);
+
+      console.log("Complete project imported successfully!");
+      console.log(`Loaded ${importedData.scenes?.length || 0} scenes`);
+      console.log(`Loaded ${importedData.sceneGroups?.length || 0} scene groups`);
+
+      // Move to next step
+      onComplete();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to import complete project");
+    } finally {
+      setLoading(false);
+      setLoadingStatus("");
+    }
+  };
+
   const estimatedCost = files.srt
     ? estimateCost(files.srt ? 30 : 0, apiProvider, "hd") // Estimate ~30 scenes
     : 0;
@@ -245,14 +318,14 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
         {/* Mode Selection */}
         <Card>
           <CardContent className="pt-6">
-            <div className="flex gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <Button
                 variant={mode === "create" ? "default" : "outline"}
                 onClick={() => setMode("create")}
                 className="flex-1"
               >
                 <Upload className="w-4 h-4 mr-2" />
-                Create New Project
+                Create New
               </Button>
               <Button
                 variant={mode === "import" ? "default" : "outline"}
@@ -262,6 +335,14 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
                 <FileJson className="w-4 h-4 mr-2" />
                 Import Project
               </Button>
+              <Button
+                variant={mode === "import-complete" ? "default" : "outline"}
+                onClick={() => setMode("import-complete")}
+                className="flex-1"
+              >
+                <FileArchive className="w-4 h-4 mr-2" />
+                Import Complete
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -269,11 +350,15 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
         {/* File Upload Section */}
         <Card>
           <CardHeader>
-            <CardTitle>{mode === "create" ? "Upload Files" : "Import Project Files"}</CardTitle>
+            <CardTitle>
+              {mode === "create" ? "Upload Files" : mode === "import" ? "Import Project Files" : "Import Complete Project"}
+            </CardTitle>
             <CardDescription>
               {mode === "create"
                 ? "Upload your SRT lyrics file and audio from Suno"
-                : "Upload your exported project JSON and audio file"}
+                : mode === "import"
+                ? "Upload your exported project JSON and audio file"
+                : "Upload your complete project ZIP file (includes audio and media)"}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -297,7 +382,32 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
                   </p>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Previously exported project file (*_project.json)
+                  Previously exported project file (*_suno-video.json)
+                </p>
+              </div>
+            )}
+
+            {mode === "import-complete" && (
+              /* Complete Project ZIP File */
+              <div className="space-y-2">
+                <Label htmlFor="complete-project-file" className="flex items-center gap-2">
+                  <FileArchive className="w-4 h-4" />
+                  Complete Project ZIP File *
+                </Label>
+                <Input
+                  id="complete-project-file"
+                  type="file"
+                  accept=".zip"
+                  onChange={handleFileChange("completeProject")}
+                  className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer text-foreground"
+                />
+                {files.completeProject && (
+                  <p className="text-sm text-muted-foreground">
+                    Selected: {files.completeProject.name}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Complete project ZIP file (*_complete.zip) - includes project data, audio, and all media
                 </p>
               </div>
             )}
@@ -326,30 +436,32 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
               </>
             )}
 
-            {/* Audio File - Required in both modes */}
-            <div className="space-y-2">
-              <Label htmlFor="audio-file" className="flex items-center gap-2">
-                <FileAudio className="w-4 h-4" />
-                Audio File (WAV/MP3) *
-              </Label>
-              <Input
-                id="audio-file"
-                type="file"
-                accept=".wav,.mp3,.m4a"
-                onChange={handleFileChange("audio")}
-                className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer text-foreground"
-              />
-              {files.audio && (
-                <p className="text-sm text-muted-foreground">
-                  Selected: {files.audio.name}
-                </p>
-              )}
-              {mode === "import" && (
-                <p className="text-xs text-muted-foreground">
-                  Audio file is required for video rendering
-                </p>
-              )}
-            </div>
+            {/* Audio File - Required in create and import modes, but not import-complete */}
+            {mode !== "import-complete" && (
+              <div className="space-y-2">
+                <Label htmlFor="audio-file" className="flex items-center gap-2">
+                  <FileAudio className="w-4 h-4" />
+                  Audio File (WAV/MP3) *
+                </Label>
+                <Input
+                  id="audio-file"
+                  type="file"
+                  accept=".wav,.mp3,.m4a"
+                  onChange={handleFileChange("audio")}
+                  className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer text-foreground"
+                />
+                {files.audio && (
+                  <p className="text-sm text-muted-foreground">
+                    Selected: {files.audio.name}
+                  </p>
+                )}
+                {mode === "import" && (
+                  <p className="text-xs text-muted-foreground">
+                    Audio file is required for video rendering
+                  </p>
+                )}
+              </div>
+            )}
 
             {mode === "create" && (
               /* Suno Style File (Optional) */
@@ -457,19 +569,30 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
 
         {/* Action Button */}
         <Button
-          onClick={mode === "create" ? handleCreateProject : handleImportProject}
+          onClick={
+            mode === "create"
+              ? handleCreateProject
+              : mode === "import"
+              ? handleImportProject
+              : handleImportCompleteProject
+          }
           disabled={
             loading ||
-            !files.audio ||
             !apiKey ||
-            (mode === "create" && !files.srt) ||
-            (mode === "import" && !files.project)
+            (mode === "create" && (!files.srt || !files.audio)) ||
+            (mode === "import" && (!files.project || !files.audio)) ||
+            (mode === "import-complete" && !files.completeProject)
           }
           size="lg"
           className="w-full"
         >
           {loading ? (
-            loadingStatus || (mode === "create" ? "Creating Project..." : "Importing Project...")
+            loadingStatus ||
+            (mode === "create"
+              ? "Creating Project..."
+              : mode === "import"
+              ? "Importing Project..."
+              : "Importing Complete Project...")
           ) : (
             <>
               {mode === "create" ? (
@@ -477,10 +600,15 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
                   <Upload className="w-4 h-4 mr-2" />
                   Create Project & Generate Prompts
                 </>
-              ) : (
+              ) : mode === "import" ? (
                 <>
                   <FileJson className="w-4 h-4 mr-2" />
                   Import Project
+                </>
+              ) : (
+                <>
+                  <FileArchive className="w-4 h-4 mr-2" />
+                  Import Complete Project
                 </>
               )}
             </>

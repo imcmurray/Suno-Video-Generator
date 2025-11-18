@@ -6,7 +6,7 @@ import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { useProject } from "../lib/project-context";
 import { VideoComposition } from "../remotion/VideoComposition";
-import { saveProject, exportImages, exportSRT, exportPrompts } from "../lib/project-storage";
+import { saveProject, exportImages, exportSRT, exportPrompts, exportCompleteProject } from "../lib/project-storage";
 
 export const VideoPreview: React.FC = () => {
   const { project } = useProject();
@@ -281,6 +281,19 @@ export const VideoPreview: React.FC = () => {
     }
   };
 
+  const handleExportCompleteProject = async () => {
+    if (!project) return;
+    if (!project.audioFile) {
+      alert("Cannot export complete project without audio file");
+      return;
+    }
+    try {
+      await exportCompleteProject(project);
+    } catch (error) {
+      alert("Failed to export complete project: " + (error instanceof Error ? error.message : "Unknown error"));
+    }
+  };
+
   return (
     <div className="container max-w-7xl mx-auto py-8 px-4">
       <div className="mb-8">
@@ -510,7 +523,7 @@ export const VideoPreview: React.FC = () => {
                 className="w-full justify-start"
               >
                 <FileArchive className="w-4 h-4 mr-2" />
-                Export Images (ZIP)
+                Export Media (ZIP)
               </Button>
 
               <Button
@@ -531,6 +544,16 @@ export const VideoPreview: React.FC = () => {
               >
                 <FileJson className="w-4 h-4 mr-2" />
                 Export Prompts (JSON)
+              </Button>
+
+              <Button
+                onClick={handleExportCompleteProject}
+                variant="outline"
+                size="sm"
+                className="w-full justify-start"
+              >
+                <FileArchive className="w-4 h-4 mr-2" />
+                Export Complete Project (ZIP)
               </Button>
             </CardContent>
           </Card>
