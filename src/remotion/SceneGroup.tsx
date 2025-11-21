@@ -20,6 +20,64 @@ const getMediaType = (sceneGroup: SceneGroupType): 'image' | 'video' => {
   return 'image';
 };
 
+// Helper to get Ken Burns animation configuration based on preset
+const getKenBurnsConfig = (preset?: string) => {
+  switch (preset) {
+    case 'static':
+      return { startScale: 1, endScale: 1, translateX: 0, translateY: 0 };
+    case 'zoom-in':
+      return { startScale: 1, endScale: 1.15, translateX: 0, translateY: 0 };
+    case 'zoom-out':
+      return { startScale: 1.15, endScale: 1, translateX: 0, translateY: 0 };
+    case 'pan-left':
+      return { startScale: 1, endScale: 1.05, translateX: 0, translateY: -80 };
+    case 'pan-right':
+      return { startScale: 1, endScale: 1.05, translateX: 0, translateY: 80 };
+    case 'pan-up':
+      return { startScale: 1, endScale: 1.05, translateX: -60, translateY: 0 };
+    case 'pan-down':
+      return { startScale: 1, endScale: 1.05, translateX: 60, translateY: 0 };
+    default:
+      // Default to zoom-in for backwards compatibility
+      return { startScale: 1, endScale: 1.15, translateX: 0, translateY: 0 };
+  }
+};
+
+// Helper to validate media paths and prevent invalid URL loading
+const isValidMediaPath = (path: string | undefined): boolean => {
+  // Check for undefined, null, empty
+  if (!path || path.trim() === '') return false;
+
+  // Check for literal invalid strings
+  if (path === 'undefined' || path === 'null') return false;
+
+  // Check minimum length (blob URLs are long)
+  if (path.length < 5) return false;
+
+  // For blob URLs, validate format
+  if (path.startsWith('blob:')) {
+    try {
+      const url = new URL(path);
+      return url.protocol === 'blob:';
+    } catch {
+      return false;
+    }
+  }
+
+  // For http URLs, validate format
+  if (path.startsWith('http')) {
+    try {
+      new URL(path);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Default to true for other paths (file paths, etc.)
+  return true;
+};
+
 export const SceneGroup: React.FC<SceneGroupProps> = ({
   sceneGroup,
   lyricLines,
@@ -27,6 +85,26 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+
+  // Debug: Log display settings on first frame
+  if (frame === 0) {
+    console.log(`[SceneGroup] ${sceneGroup.id.substring(0, 8)} display settings:`, {
+      displayMode: sceneGroup.displayMode,
+      kenBurnsPreset: sceneGroup.kenBurnsPreset,
+      coverVerticalPosition: sceneGroup.coverVerticalPosition,
+    });
+  }
+
+  // Log when this component renders (only on frame 0 to avoid spam)
+  if (frame === 0) {
+    console.log('[SceneGroup] 🎬 Rendering group:', {
+      groupId: sceneGroup.id.substring(0, 8),
+      displayMode: sceneGroup.displayMode,
+      imagePath: sceneGroup.imagePath?.substring(0, 50),
+      hasValidPath: isValidMediaPath(sceneGroup.imagePath),
+      mediaType: getMediaType(sceneGroup),
+    });
+  }
 
   // Crossfade transition duration (0.5 seconds at 30fps)
   const transitionDuration = 15;
@@ -56,19 +134,27 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
   // Combine fade in and fade out
   const opacity = Math.min(fadeIn, fadeOut);
 
-  // Ken Burns effect: slow zoom from 100% to 110% over the scene duration
-  const scale = interpolate(frame, [0, durationInFrames], [1, 1.1], {
-    extrapolateRight: "clamp",
-  });
+  // Ken Burns effect: configurable animation based on preset
+  const kenBurnsConfig = getKenBurnsConfig(sceneGroup.kenBurnsPreset);
+  const scale = interpolate(
+    frame,
+    [0, durationInFrames],
+    [kenBurnsConfig.startScale, kenBurnsConfig.endScale],
+    { extrapolateRight: "clamp" }
+  );
 
-  // Subtle pan: move from center to slightly right
   const translateX = interpolate(
     frame,
     [0, durationInFrames],
-    [0, -50], // negative moves image right (pan left)
-    {
-      extrapolateRight: "clamp",
-    }
+    [0, kenBurnsConfig.translateX],
+    { extrapolateRight: "clamp" }
+  );
+
+  const translateY = interpolate(
+    frame,
+    [0, durationInFrames],
+    [0, kenBurnsConfig.translateY],
+    { extrapolateRight: "clamp" }
   );
 
   // Check if the media is a video file using MediaVersions metadata
@@ -92,31 +178,107 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
         opacity,
       }}
     >
-      {sceneGroup.imagePath ? (
+      {isValidMediaPath(sceneGroup.imagePath) ? (
         <>
-          {/* Render Video or Image */}
-          {isVideo ? (
-            <Video
-              src={sceneGroup.imagePath}
-              loop={shouldLoop}
-              muted={true} // Mute video audio - only play song audio
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                transform: `scale(${scale}) translateX(${translateX}px)`,
-              }}
-            />
+          {/* Render Video or Image with display mode */}
+          {sceneGroup.displayMode === 'contain-blur' ? (
+            <>
+              {frame === 0 && console.log('[SceneGroup] 📺 Creating 2 media elements for contain-blur mode')}
+              {/* Blurred background layer */}
+              {isVideo ? (
+                <Video
+                  src={sceneGroup.imagePath}
+                  loop={shouldLoop}
+                  muted={true}
+                  style={{
+                    position: "absolute",
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    filter: "blur(40px)",
+                    opacity: 0.6,
+                    transform: `scale(1.2)`, // Prevent blur edge artifacts
+                  }}
+                  onError={() => frame === 0 && console.log('[SceneGroup] ❌ Video error (blurred background)')}
+                />
+              ) : (
+                <Img
+                  src={sceneGroup.imagePath}
+                  style={{
+                    position: "absolute",
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    filter: "blur(40px)",
+                    opacity: 0.6,
+                    transform: `scale(1.2)`, // Prevent blur edge artifacts
+                  }}
+                  onError={() => frame === 0 && console.log('[SceneGroup] ❌ Image error (blurred background)')}
+                />
+              )}
+
+              {/* Main content layer (contained) */}
+              {isVideo ? (
+                <Video
+                  src={sceneGroup.imagePath}
+                  loop={shouldLoop}
+                  muted={true}
+                  style={{
+                    position: "relative",
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "contain",
+                    transform: `scale(${scale}) translate(${translateX}px, ${translateY}px)`,
+                  }}
+                  onError={() => frame === 0 && console.log('[SceneGroup] ❌ Video error (main content)')}
+                />
+              ) : (
+                <Img
+                  src={sceneGroup.imagePath}
+                  style={{
+                    position: "relative",
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "contain",
+                    transform: `scale(${scale}) translate(${translateX}px, ${translateY}px)`,
+                  }}
+                  onError={() => frame === 0 && console.log('[SceneGroup] ❌ Image error (main content)')}
+                />
+              )}
+            </>
           ) : (
-            <Img
-              src={sceneGroup.imagePath}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                transform: `scale(${scale}) translateX(${translateX}px)`,
-              }}
-            />
+            /* Cover or Contain mode (single layer) */
+            <>
+              {isVideo ? (
+                <Video
+                  src={sceneGroup.imagePath}
+                  loop={shouldLoop}
+                  muted={true}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: sceneGroup.displayMode === 'contain' ? 'contain' : 'cover',
+                    objectPosition: sceneGroup.displayMode === 'cover'
+                      ? `center ${sceneGroup.coverVerticalPosition ?? 50}%`
+                      : 'center',
+                    transform: `scale(${scale}) translate(${translateX}px, ${translateY}px)`,
+                  }}
+                />
+              ) : (
+                <Img
+                  src={sceneGroup.imagePath}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: sceneGroup.displayMode === 'contain' ? 'contain' : 'cover',
+                    objectPosition: sceneGroup.displayMode === 'cover'
+                      ? `center ${sceneGroup.coverVerticalPosition ?? 50}%`
+                      : 'center',
+                    transform: `scale(${scale}) translate(${translateX}px, ${translateY}px)`,
+                  }}
+                />
+              )}
+            </>
           )}
 
           {/* Lyric text overlay (karaoke style) - skip for instrumental groups */}

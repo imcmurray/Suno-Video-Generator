@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 import { ProjectData, SceneData } from "../types";
 import { APIProvider } from "./image-api";
+import { revokeAllBlobURLs } from "./blob-manager";
 
 export interface ProjectState extends ProjectData {
   audioFile?: File;
@@ -31,6 +32,22 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [project, setProjectState] = useState<ProjectState | null>(null);
 
   const setProject = (newProject: ProjectState | null) => {
+    // Detect if we're switching to a completely different project
+    const isSwitchingProjects =
+      // Case 1: Clearing the project (null)
+      newProject === null ||
+      // Case 2: Starting a new project when none exists
+      (project === null && newProject !== null) ||
+      // Case 3: Loading a different project (different SRT file name or no previous project)
+      (project !== null && newProject !== null &&
+       project.metadata.srtFile !== newProject.metadata.srtFile);
+
+    // Revoke all blob URLs when switching to a different project
+    if (isSwitchingProjects && project !== null) {
+      console.log('[ProjectContext] Switching projects - revoking all blob URLs');
+      revokeAllBlobURLs();
+    }
+
     setProjectState(newProject);
   };
 

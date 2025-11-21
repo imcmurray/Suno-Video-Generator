@@ -157,6 +157,8 @@ function createInstrumentalGroups(
       filename: `scene_group_${String(groupCounter.count++).padStart(3, '0')}.jpg`,
       isReusedGroup: false,
       isInstrumental: true,
+      displayMode: 'cover',
+      kenBurnsPreset: 'zoom-in',
     });
   } else {
     // Split into multiple groups
@@ -195,6 +197,8 @@ function createInstrumentalGroups(
         filename: `scene_group_${String(groupCounter.count++).padStart(3, '0')}.jpg`,
         isReusedGroup: false,
         isInstrumental: true,
+        displayMode: 'cover',
+        kenBurnsPreset: 'zoom-in',
       });
     }
   }
@@ -285,6 +289,8 @@ export function suggestGroupings(
       filename: `scene_group_${String(groupCounter.count++).padStart(3, '0')}.jpg`,
       isReusedGroup: false,
       isInstrumental: false,
+      displayMode: 'cover',
+      kenBurnsPreset: 'zoom-in',
     });
 
     i = j;
@@ -471,6 +477,8 @@ export function createGapGroups(
         isReusedGroup: false,
         isInstrumental: true,
         isGap: true, // Mark as gap placeholder
+        displayMode: 'cover',
+        kenBurnsPreset: 'zoom-in',
       });
     }
   }

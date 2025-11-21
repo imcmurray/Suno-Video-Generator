@@ -5,17 +5,29 @@ import { ProjectSetup } from "./components/ProjectSetup";
 import { SceneGroupingEditor } from "./components/SceneGroupingEditor";
 import { PromptEditor } from "./components/PromptEditor";
 import { ImageGeneration } from "./components/ImageGeneration";
+import { DisplayConfigEditor } from "./components/DisplayConfigEditor";
 import { VideoPreview } from "./components/VideoPreview";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import "./styles/globals.css";
 
-type AppStep = "setup" | "grouping" | "edit" | "generate" | "preview";
+type AppStep = "setup" | "grouping" | "edit" | "generate" | "configure" | "preview";
 
 const App: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<AppStep>("setup");
 
+  const getStepNumber = (step: AppStep): number => {
+    const steps: AppStep[] = ["setup", "grouping", "edit", "generate", "configure", "preview"];
+    return steps.indexOf(step) + 1;
+  };
+
+  // Log step changes
+  React.useEffect(() => {
+    console.log(`[App] 📍 Current Step: ${currentStep} (${getStepNumber(currentStep)}/6)`);
+  }, [currentStep]);
+
   const renderStep = () => {
+    console.log('[App] 🔄 Rendering step:', currentStep);
     switch (currentStep) {
       case "setup":
         return <ProjectSetup onComplete={() => setCurrentStep("grouping")} />;
@@ -29,17 +41,14 @@ const App: React.FC = () => {
       case "edit":
         return <PromptEditor onNext={() => setCurrentStep("generate")} />;
       case "generate":
-        return <ImageGeneration onNext={() => setCurrentStep("preview")} />;
+        return <ImageGeneration onNext={() => setCurrentStep("configure")} />;
+      case "configure":
+        return <DisplayConfigEditor />;
       case "preview":
         return <VideoPreview />;
       default:
         return <ProjectSetup onComplete={() => setCurrentStep("grouping")} />;
     }
-  };
-
-  const getStepNumber = (step: AppStep): number => {
-    const steps: AppStep[] = ["setup", "grouping", "edit", "generate", "preview"];
-    return steps.indexOf(step) + 1;
   };
 
   return (
@@ -78,9 +87,13 @@ const App: React.FC = () => {
                       <span className="hidden sm:inline">4. Generate Images</span>
                       <span className="sm:hidden">4</span>
                     </TabsTrigger>
-                    <TabsTrigger value="preview">
-                      <span className="hidden sm:inline">5. Preview & Render</span>
+                    <TabsTrigger value="configure">
+                      <span className="hidden sm:inline">5. Configure Display</span>
                       <span className="sm:hidden">5</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="preview">
+                      <span className="hidden sm:inline">6. Preview & Render</span>
+                      <span className="sm:hidden">6</span>
                     </TabsTrigger>
                   </TabsList>
                 </Tabs>

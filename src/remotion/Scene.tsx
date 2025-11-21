@@ -33,8 +33,8 @@ export const Scene: React.FC<SceneProps> = ({ scene, durationInFrames }) => {
   // Combine fade in and fade out
   const opacity = Math.min(fadeIn, fadeOut);
 
-  // Ken Burns effect: slow zoom from 100% to 110% over the scene duration
-  const scale = interpolate(frame, [0, durationInFrames], [1, 1.1], {
+  // Ken Burns effect: slow zoom from 100% to 115% over the scene duration
+  const scale = interpolate(frame, [0, durationInFrames], [1, 1.15], {
     extrapolateRight: "clamp",
   });
 

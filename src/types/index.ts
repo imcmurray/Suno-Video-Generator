@@ -41,6 +41,9 @@ export interface SceneGroup {
   originalGroupId?: string; // reference to original group if reused
   isInstrumental: boolean; // true for [Intro]/[Outro]/[Instrumental] sections
   isGap?: boolean; // true for auto-generated gap placeholders (no SRT entry)
+  displayMode?: 'cover' | 'contain' | 'contain-blur'; // How media is displayed in composition
+  kenBurnsPreset?: 'static' | 'zoom-in' | 'zoom-out' | 'pan-left' | 'pan-right' | 'pan-up' | 'pan-down'; // Ken Burns animation preset
+  coverVerticalPosition?: number; // Vertical position for cover mode (0-100%, 50 = center)
 }
 
 // Legacy interface for backward compatibility

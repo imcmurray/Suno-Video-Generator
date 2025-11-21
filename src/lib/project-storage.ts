@@ -2,6 +2,7 @@ import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import { ProjectState } from "./project-context";
 import { SceneGroup } from "../types";
+import { createBlobURL, revokeGroupBlobURLs } from "./blob-manager";
 
 /**
  * Save project state to JSON file
@@ -17,7 +18,7 @@ export async function saveProject(project: ProjectState): Promise<void> {
     lyricLines: project.lyricLines,
     useGrouping: project.useGrouping,
     sceneGroups: project.sceneGroups?.map((group) => ({
-      ...group,
+      ...group, // Preserves displayMode, kenBurnsPreset, coverVerticalPosition
       // Don't save blob URLs, they won't work after reload
       imagePath: group.imagePath?.startsWith("blob:") ? undefined : group.imagePath,
       // Save mediaVersions with file references (no blob URLs)
@@ -229,7 +230,7 @@ export async function exportCompleteProject(project: ProjectState): Promise<void
     lyricLines: project.lyricLines,
     useGrouping: project.useGrouping,
     sceneGroups: project.sceneGroups?.map((group) => ({
-      ...group,
+      ...group, // Preserves displayMode, kenBurnsPreset, coverVerticalPosition
       imagePath: undefined, // Will be restored from manifest
       mediaVersions: group.mediaVersions?.map((version) => ({
         ...version,
@@ -360,7 +361,7 @@ export async function importCompleteProject(
     }).filter((v: any) => v !== null);
 
     return {
-      ...group,
+      ...group, // Preserves displayMode, kenBurnsPreset, coverVerticalPosition
       mediaVersions,
       activeMediaId: groupManifest.activeMediaId,
     };
@@ -369,11 +370,15 @@ export async function importCompleteProject(
   // 5. Create blob URLs for all media (async operation)
   if (sceneGroups) {
     for (const group of sceneGroups) {
+      // Revoke any existing blob URLs for this group before creating new ones
+      revokeGroupBlobURLs(group.id);
+
       if (group.mediaVersions) {
         for (const version of group.mediaVersions) {
           if (version.zipFile) {
             const blob = await version.zipFile.async("blob");
-            version.path = URL.createObjectURL(blob);
+            // Create and register blob URL with metadata for tracking
+            version.path = createBlobURL(blob, { groupId: group.id, versionLabel: version.label });
             delete version.zipFile; // Clean up
 
             // Set imagePath to active media

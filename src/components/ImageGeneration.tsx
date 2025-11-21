@@ -8,6 +8,7 @@ import { generateImage, estimateCost, convertImageToVideo, exportImageToFolder, 
 import { SceneData, SceneGroup, MediaVersion } from "../types";
 import { v4 as uuidv4 } from 'uuid';
 import { ImageModal } from "./ImageModal";
+import { createBlobURL, revokeBlobURL, revokeVersionBlobURL } from "../lib/blob-manager";
 
 interface GenerationStatus {
   id: string; // scene sequence or group ID
@@ -167,16 +168,27 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
   const selectMediaVersion = (groupId: string, versionId: string) => {
     if (!project || !project.sceneGroups) return;
 
+    // Find the version first to reuse for reused groups
+    const originalGroup = project.sceneGroups.find(g => g.id === groupId);
+    const selectedVersion = originalGroup?.mediaVersions?.find(v => v.id === versionId);
+
     const updatedGroups = project.sceneGroups.map((group) => {
       if (group.id === groupId) {
-        const version = group.mediaVersions?.find(v => v.id === versionId);
-        if (version) {
+        if (selectedVersion) {
           return {
             ...group,
             activeMediaId: versionId,
-            imagePath: version.path,
+            imagePath: selectedVersion.path,
           };
         }
+      }
+      // Also update reused groups to sync with original's selection
+      if (group.isReusedGroup && group.originalGroupId === groupId && selectedVersion) {
+        return {
+          ...group,
+          activeMediaId: versionId,
+          imagePath: selectedVersion.path,
+        };
       }
       return group;
     });
@@ -190,17 +202,18 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
   const updateGroupImage = (groupId: string, imageUrl: string) => {
     if (!project || !project.sceneGroups) return;
 
+    // Create the media version once for reuse
+    const mediaVersion: MediaVersion = {
+      id: uuidv4(),
+      type: 'image',
+      path: imageUrl,
+      createdAt: Date.now(),
+      label: 'Original Image',
+    };
+
     const updatedGroups = project.sceneGroups.map((group) => {
       if (group.id === groupId) {
-        // Initialize media versions with the first image
-        const mediaVersion: MediaVersion = {
-          id: uuidv4(),
-          type: 'image',
-          path: imageUrl,
-          createdAt: Date.now(),
-          label: 'Original Image',
-        };
-
+        // Update original group with new media
         return {
           ...group,
           imagePath: imageUrl,
@@ -210,7 +223,13 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
       }
       // Also update reused groups that reference this one
       if (group.isReusedGroup && group.originalGroupId === groupId) {
-        return { ...group, imagePath: imageUrl };
+        // Fully sync reused groups with original's media data
+        return {
+          ...group,
+          imagePath: imageUrl,
+          mediaVersions: [mediaVersion],
+          activeMediaId: mediaVersion.id,
+        };
       }
       return group;
     });
@@ -268,7 +287,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
 
           if (result.success && (result.imageData || result.imageUrl)) {
             // Handle both blob URLs (OpenAI) and direct URLs (Grok)
-            const imageUrl = result.imageUrl || URL.createObjectURL(result.imageData!);
+            const imageUrl = result.imageUrl || createBlobURL(result.imageData!, { groupId: group.id });
             updateGroupImage(group.id, imageUrl);
             updateStatus(group.id, {
               status: "completed",
@@ -328,7 +347,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
 
           if (result.success && (result.imageData || result.imageUrl)) {
             // Handle both blob URLs (OpenAI) and direct URLs (Grok)
-            const imageUrl = result.imageUrl || URL.createObjectURL(result.imageData!);
+            const imageUrl = result.imageUrl || createBlobURL(result.imageData!);
             updateScene(scene.sequence, { imagePath: imageUrl });
             updateStatus(scene.sequence.toString(), {
               status: "completed",
@@ -410,7 +429,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
       });
 
       if (result.success && result.videoData) {
-        const videoUrl = URL.createObjectURL(result.videoData);
+        const videoUrl = createBlobURL(result.videoData, { groupId, versionLabel: videoLabel });
         addMediaVersion(groupId, videoUrl, 'video', videoLabel);
         updateStatus(groupId, {
           status: "completed",
@@ -519,11 +538,17 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
         const qualityLabel = result.quality === 'HD' ? 'HD Video' : 'SD Video';
         const label = videoCount === 0 ? qualityLabel : `${qualityLabel} v${videoCount + 1}`;
 
+        // Revoke the unmanaged blob URL from importVideo
+        URL.revokeObjectURL(result.videoUrl);
+
+        // Create a managed blob URL instead
+        const managedVideoUrl = createBlobURL(file, { groupId, versionLabel: label });
+
         // Create new media version with quality
         const newVersion: MediaVersion = {
           id: uuidv4(),
           type: 'video',
-          path: result.videoUrl,
+          path: managedVideoUrl,
           createdAt: Date.now(),
           label,
           quality: result.quality,
@@ -538,7 +563,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
               ...g,
               mediaVersions: updatedVersions,
               activeMediaId: newVersion.id,
-              imagePath: result.videoUrl,
+              imagePath: managedVideoUrl,
             };
           }
           return g;
@@ -550,7 +575,8 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
         });
 
         updateStatus(groupId, {
-          imageUrl: result.videoUrl,
+          status: "completed",
+          imageUrl: managedVideoUrl,
           hasVideo: true,
         });
 
@@ -589,11 +615,11 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
       await handleImportVideo(groupId, videoFile);
     } else if (imageFile) {
       // Handle image drop - create synthetic event for handler
-      const imageUrl = URL.createObjectURL(imageFile);
       const group = project?.sceneGroups?.find(g => g.id === groupId);
       const imageCount = group?.mediaVersions?.filter(v => v.type === 'image').length || 0;
       const label = imageCount === 0 ? 'Original Image' : `Image v${imageCount + 1}`;
 
+      const imageUrl = createBlobURL(imageFile, { groupId, versionLabel: label });
       addMediaVersion(groupId, imageUrl, 'image', label);
       updateStatus(groupId, {
         status: 'completed',
@@ -648,13 +674,12 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
       });
 
       if (result.success && (result.imageData || result.imageUrl)) {
-        const imageUrl = result.imageUrl || URL.createObjectURL(result.imageData!);
-
         // Add as a new variation (not replacing original)
         const group = updatedGroups.find(g => g.id === groupId);
         const imageCount = group?.mediaVersions?.filter(v => v.type === 'image').length || 0;
         const label = imageCount === 0 ? 'Original Image' : `Image v${imageCount + 1}`;
 
+        const imageUrl = result.imageUrl || createBlobURL(result.imageData!, { groupId, versionLabel: label });
         addMediaVersion(groupId, imageUrl, 'image', label);
 
         updateStatus(groupId, {
@@ -735,13 +760,13 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
   const handleImageFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>, groupId: string) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith('image/')) {
-      // Create blob URL for the uploaded image
-      const imageUrl = URL.createObjectURL(file);
-
       // Count existing images for label
       const group = project?.sceneGroups?.find(g => g.id === groupId);
       const imageCount = group?.mediaVersions?.filter(v => v.type === 'image').length || 0;
       const label = imageCount === 0 ? 'Original Image' : `Image v${imageCount + 1}`;
+
+      // Create blob URL for the uploaded image
+      const imageUrl = createBlobURL(file, { groupId, versionLabel: label });
 
       // Add as new media version
       addMediaVersion(groupId, imageUrl, 'image', label);

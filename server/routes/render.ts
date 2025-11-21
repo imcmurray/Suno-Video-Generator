@@ -3,12 +3,24 @@ import multer from "multer";
 import { renderQueue, RenderJobInput } from "../render-queue";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 
 const router = Router();
 
-// Configure multer for file uploads
+// Configure multer for file uploads with extension preservation
+const storage = multer.diskStorage({
+  destination: path.join(__dirname, "../uploads"),
+  filename: (req, file, cb) => {
+    // Extract extension from original filename
+    const ext = path.extname(file.originalname);
+    // Generate random filename + preserve extension
+    const randomName = crypto.randomBytes(16).toString('hex');
+    cb(null, `${randomName}${ext}`);
+  }
+});
+
 const upload = multer({
-  dest: path.join(__dirname, "../uploads"),
+  storage: storage,
   limits: {
     fileSize: 100 * 1024 * 1024, // 100MB max
   },
@@ -54,6 +66,15 @@ router.post("/render", upload.any(), async (req: Request, res: Response) => {
       const parsedLines = JSON.parse(lyricLines);
 
       console.log(`Processing ${parsedGroups.length} scene groups for render`);
+
+      // Debug: Log display settings for first group
+      if (parsedGroups.length > 0) {
+        console.log('[Render] First group display settings:', {
+          displayMode: parsedGroups[0].displayMode,
+          kenBurnsPreset: parsedGroups[0].kenBurnsPreset,
+          coverVerticalPosition: parsedGroups[0].coverVerticalPosition,
+        });
+      }
 
       // Replace media file keys with server HTTP URLs
       const groupsWithUrls = parsedGroups.map((group: any) => {
@@ -106,6 +127,15 @@ router.post("/render", upload.any(), async (req: Request, res: Response) => {
         }
         return group;
       });
+
+      // Debug: Verify display settings are preserved after URL mapping
+      if (groupsWithUrls.length > 0) {
+        console.log('[Render] After URL mapping, first group display settings:', {
+          displayMode: groupsWithUrls[0].displayMode,
+          kenBurnsPreset: groupsWithUrls[0].kenBurnsPreset,
+          coverVerticalPosition: groupsWithUrls[0].coverVerticalPosition,
+        });
+      }
 
       inputProps = {
         scenes: [], // Empty for backward compatibility

@@ -204,6 +204,10 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
             exported: v.exported,
           })) : group.mediaVersions,
           activeMediaId: group.active_media_id || group.activeMediaId,
+          // Display configuration
+          displayMode: group.display_mode || group.displayMode,
+          kenBurnsPreset: group.ken_burns_preset || group.kenBurnsPreset,
+          coverVerticalPosition: group.cover_vertical_position || group.coverVerticalPosition,
         }));
       }
 

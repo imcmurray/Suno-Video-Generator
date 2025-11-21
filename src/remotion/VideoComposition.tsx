@@ -12,6 +12,14 @@ export const VideoComposition = ({
 }: VideoCompositionProps) => {
   const { fps } = useVideoConfig();
 
+  // Log when VideoComposition mounts/renders
+  console.log('[VideoComposition] 🎥 Component rendering:', {
+    useGrouping,
+    sceneGroupsCount: sceneGroups?.length,
+    scenesCount: scenes?.length,
+    hasAudio: !!audioPath,
+  });
+
   // Convert seconds to frames
   const secondsToFrames = (seconds: number) => Math.floor(seconds * fps);
 

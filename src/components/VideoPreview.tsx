@@ -13,6 +13,7 @@ export const VideoPreview: React.FC = () => {
   const [isRendering, setIsRendering] = useState(false);
   const [renderProgress, setRenderProgress] = useState(0);
   const [renderJobId, setRenderJobId] = useState<string | null>(null);
+  const [renderedVideoJobId, setRenderedVideoJobId] = useState<string | null>(null);
 
   if (!project || !project.audioFile) return null;
 
@@ -171,6 +172,10 @@ export const VideoPreview: React.FC = () => {
           // Include media type metadata for correct rendering
           mediaVersions: group.mediaVersions,
           activeMediaId: group.activeMediaId,
+          // Include display configuration
+          displayMode: group.displayMode,
+          kenBurnsPreset: group.kenBurnsPreset,
+          coverVerticalPosition: group.coverVerticalPosition,
         }));
 
         formData.append("sceneGroups", JSON.stringify(sceneGroupsForBackend));
@@ -217,6 +222,7 @@ export const VideoPreview: React.FC = () => {
           if (statusData.status === "completed") {
             clearInterval(pollInterval);
             setIsRendering(false);
+            setRenderedVideoJobId(jobId);
 
             // Download the video
             window.location.href = `http://localhost:3002/api/render/${jobId}/download`;
@@ -238,6 +244,19 @@ export const VideoPreview: React.FC = () => {
       alert(`Render failed: ${error instanceof Error ? error.message : "Unknown error"}`);
       setIsRendering(false);
     }
+  };
+
+  const handleReDownload = () => {
+    if (renderedVideoJobId) {
+      window.location.href = `http://localhost:3002/api/render/${renderedVideoJobId}/download`;
+    }
+  };
+
+  const handleRenderAgain = () => {
+    setRenderedVideoJobId(null);
+    setRenderJobId(null);
+    setRenderProgress(0);
+    setIsRendering(false);
   };
 
   const handleSaveProject = async () => {
@@ -455,24 +474,46 @@ export const VideoPreview: React.FC = () => {
                 </div>
               </div>
 
-              <Button
-                onClick={handleRender}
-                disabled={isRendering}
-                size="lg"
-                className="w-full"
-              >
-                {isRendering ? (
-                  <>
-                    <FileVideo className="w-4 h-4 mr-2 animate-pulse" />
-                    Rendering... {renderProgress.toFixed(1)}%
-                  </>
-                ) : (
-                  <>
+              {renderedVideoJobId && !isRendering ? (
+                <>
+                  <Button
+                    onClick={handleReDownload}
+                    size="lg"
+                    className="w-full"
+                  >
                     <Download className="w-4 h-4 mr-2" />
-                    Render Video
-                  </>
-                )}
-              </Button>
+                    Download Video
+                  </Button>
+                  <Button
+                    onClick={handleRenderAgain}
+                    variant="outline"
+                    size="lg"
+                    className="w-full mt-2"
+                  >
+                    <FileVideo className="w-4 h-4 mr-2" />
+                    Render Again
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  onClick={handleRender}
+                  disabled={isRendering}
+                  size="lg"
+                  className="w-full"
+                >
+                  {isRendering ? (
+                    <>
+                      <FileVideo className="w-4 h-4 mr-2 animate-pulse" />
+                      Rendering... {renderProgress.toFixed(1)}%
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4 mr-2" />
+                      Render Video
+                    </>
+                  )}
+                </Button>
+              )}
 
               {isRendering && (
                 <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
@@ -483,13 +524,27 @@ export const VideoPreview: React.FC = () => {
                 </div>
               )}
 
-              {!isRendering && (
+              {!isRendering && !renderedVideoJobId && (
                 <p className="text-xs text-muted-foreground text-center">
                   Estimated render time: {Math.ceil(totalDurationSeconds / 10)} - {Math.ceil(totalDurationSeconds / 5)} minutes
                 </p>
               )}
 
-              {renderJobId && (
+              {renderedVideoJobId && !isRendering && (
+                <div className="mt-4 p-3 bg-muted rounded-lg space-y-2">
+                  <p className="text-xs font-medium">Video Rendered Successfully</p>
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    <p>
+                      <span className="font-medium">Server location:</span> /server/outputs/{renderedVideoJobId}.mov
+                    </p>
+                    <p>
+                      <span className="font-medium">Browser download:</span> Check your downloads folder for music-video-{renderedVideoJobId}.mov
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {renderJobId && isRendering && (
                 <p className="text-xs text-muted-foreground text-center">
                   Job ID: {renderJobId}
                 </p>
