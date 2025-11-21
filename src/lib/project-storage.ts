@@ -3,6 +3,7 @@ import { saveAs } from "file-saver";
 import { ProjectState } from "./project-context";
 import { SceneGroup } from "../types";
 import { createBlobURL, revokeGroupBlobURLs } from "./blob-manager";
+import { detectVideoFPS } from "./media-utils";
 
 /**
  * Save project state to JSON file
@@ -380,6 +381,17 @@ export async function importCompleteProject(
             // Create and register blob URL with metadata for tracking
             version.path = createBlobURL(blob, { groupId: group.id, versionLabel: version.label });
             delete version.zipFile; // Clean up
+
+            // Detect FPS for videos if not already present
+            if (version.type === 'video' && !version.fps) {
+              try {
+                const detectedFPS = await detectVideoFPS(version.path);
+                version.fps = detectedFPS ?? undefined;
+                console.log(`[importCompleteProject] Detected FPS for ${version.label}: ${version.fps || 'unknown, will use composition default'}`);
+              } catch (error) {
+                console.warn(`[importCompleteProject] Failed to detect FPS for ${version.label}:`, error);
+              }
+            }
 
             // Set imagePath to active media
             if (version.id === group.activeMediaId) {

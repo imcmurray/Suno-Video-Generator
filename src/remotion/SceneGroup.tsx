@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, Img, Video, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Img, OffthreadVideo, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { SceneGroupProps, SceneGroup as SceneGroupType } from "../types";
 
 // Helper to determine media type from MediaVersions array (works with blob URLs)
@@ -160,6 +160,18 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
   // Check if the media is a video file using MediaVersions metadata
   const isVideo = getMediaType(sceneGroup) === 'video';
 
+  // Calculate playback rate based on video FPS (normalize to composition FPS of 30)
+  let playbackRate = 1;
+  if (isVideo && sceneGroup.activeMediaId && sceneGroup.mediaVersions) {
+    const activeVersion = sceneGroup.mediaVersions.find(v => v.id === sceneGroup.activeMediaId);
+    if (activeVersion?.fps) {
+      playbackRate = activeVersion.fps / fps; // fps is composition FPS (30)
+      if (frame === 0) {
+        console.log(`[SceneGroup] 🎬 Applying playbackRate: ${playbackRate.toFixed(2)} (video: ${activeVersion.fps}fps / composition: ${fps}fps)`);
+      }
+    }
+  }
+
   // Calculate current time and find active lyric line
   const currentTime = sceneGroup.start + (frame / fps);
   const activeLyricLine = lyricLines.find(
@@ -186,10 +198,12 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
               {frame === 0 && console.log('[SceneGroup] 📺 Creating 2 media elements for contain-blur mode')}
               {/* Blurred background layer */}
               {isVideo ? (
-                <Video
+                <OffthreadVideo
                   src={sceneGroup.imagePath}
                   loop={shouldLoop}
                   muted={true}
+                  playbackRate={playbackRate}
+                  delayRenderTimeoutInMilliseconds={60000}
                   style={{
                     position: "absolute",
                     width: "100%",
@@ -219,16 +233,18 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
 
               {/* Main content layer (contained) */}
               {isVideo ? (
-                <Video
+                <OffthreadVideo
                   src={sceneGroup.imagePath}
                   loop={shouldLoop}
                   muted={true}
+                  playbackRate={playbackRate}
+                  delayRenderTimeoutInMilliseconds={60000}
                   style={{
                     position: "relative",
                     width: "100%",
                     height: "100%",
                     objectFit: "contain",
-                    transform: `scale(${scale}) translate(${translateX}px, ${translateY}px)`,
+                    transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
                   }}
                   onError={() => frame === 0 && console.log('[SceneGroup] ❌ Video error (main content)')}
                 />
@@ -240,7 +256,7 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
                     width: "100%",
                     height: "100%",
                     objectFit: "contain",
-                    transform: `scale(${scale}) translate(${translateX}px, ${translateY}px)`,
+                    transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
                   }}
                   onError={() => frame === 0 && console.log('[SceneGroup] ❌ Image error (main content)')}
                 />
@@ -250,10 +266,12 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
             /* Cover or Contain mode (single layer) */
             <>
               {isVideo ? (
-                <Video
+                <OffthreadVideo
                   src={sceneGroup.imagePath}
                   loop={shouldLoop}
                   muted={true}
+                  playbackRate={playbackRate}
+                  delayRenderTimeoutInMilliseconds={60000}
                   style={{
                     width: "100%",
                     height: "100%",
@@ -261,7 +279,7 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
                     objectPosition: sceneGroup.displayMode === 'cover'
                       ? `center ${sceneGroup.coverVerticalPosition ?? 50}%`
                       : 'center',
-                    transform: `scale(${scale}) translate(${translateX}px, ${translateY}px)`,
+                    transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
                   }}
                 />
               ) : (
@@ -274,7 +292,7 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
                     objectPosition: sceneGroup.displayMode === 'cover'
                       ? `center ${sceneGroup.coverVerticalPosition ?? 50}%`
                       : 'center',
-                    transform: `scale(${scale}) translate(${translateX}px, ${translateY}px)`,
+                    transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
                   }}
                 />
               )}

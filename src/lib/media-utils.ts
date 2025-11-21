@@ -288,3 +288,71 @@ export function suggestDisplayMode(orientation: MediaOrientation): 'cover' | 'co
   }
   return 'cover'; // Landscape and square media can fill the frame
 }
+
+/**
+ * Detect the frame rate (FPS) of a video file
+ * @param videoPath - Blob URL or file path to the video
+ * @returns Promise resolving to the FPS, or null if detection fails
+ */
+export async function detectVideoFPS(videoPath: string): Promise<number | null> {
+  if (!videoPath || videoPath.trim() === '') {
+    console.warn('[detectVideoFPS] Invalid video path');
+    return null;
+  }
+
+  return new Promise((resolve) => {
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted = true;
+
+    // Timeout after 5 seconds
+    const timeout = setTimeout(() => {
+      video.removeAttribute('src');
+      video.load();
+      video.remove();
+      console.warn('[detectVideoFPS] Timeout detecting FPS for:', videoPath.substring(0, 50));
+      resolve(null);
+    }, 5000);
+
+    video.onloadedmetadata = () => {
+      clearTimeout(timeout);
+
+      // Try to get FPS from various sources
+      let fps: number | null = null;
+
+      // Method 1: Try to read from video element properties (not always available)
+      const videoElement = video as any;
+      if (videoElement.mozFrameRate) {
+        fps = videoElement.mozFrameRate;
+      } else if (videoElement.webkitFrameRate) {
+        fps = videoElement.webkitFrameRate;
+      }
+
+      // Method 2: Default to common frame rates if not detected
+      // Most video generation APIs use 24, 30, or 60 fps
+      if (!fps) {
+        console.warn('[detectVideoFPS] Could not detect FPS, defaulting to 30fps for:', videoPath.substring(0, 50));
+        fps = 30; // Default assumption
+      }
+
+      console.log('[detectVideoFPS] Detected FPS:', fps, 'for:', videoPath.substring(0, 50));
+
+      video.removeAttribute('src');
+      video.load();
+      video.remove();
+
+      resolve(fps);
+    };
+
+    video.onerror = () => {
+      clearTimeout(timeout);
+      video.removeAttribute('src');
+      video.load();
+      video.remove();
+      console.warn('[detectVideoFPS] Error loading video for FPS detection:', videoPath.substring(0, 50));
+      resolve(null);
+    };
+
+    video.src = videoPath;
+  });
+}

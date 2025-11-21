@@ -9,6 +9,7 @@ import { SceneData, SceneGroup, MediaVersion } from "../types";
 import { v4 as uuidv4 } from 'uuid';
 import { ImageModal } from "./ImageModal";
 import { createBlobURL, revokeBlobURL, revokeVersionBlobURL } from "../lib/blob-manager";
+import { detectVideoFPS } from "../lib/media-utils";
 
 interface GenerationStatus {
   id: string; // scene sequence or group ID
@@ -132,8 +133,20 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
   };
 
   // Helper to add a media version to a group
-  const addMediaVersion = (groupId: string, mediaPath: string, type: 'image' | 'video', label: string) => {
+  const addMediaVersion = async (groupId: string, mediaPath: string, type: 'image' | 'video', label: string) => {
     if (!project || !project.sceneGroups) return;
+
+    // Detect FPS for video files
+    let fps: number | undefined;
+    if (type === 'video') {
+      try {
+        const detectedFPS = await detectVideoFPS(mediaPath);
+        fps = detectedFPS ?? undefined; // Convert null to undefined
+        console.log(`[ImageGeneration] Detected FPS for ${label}: ${fps || 'unknown, will use composition default'}`);
+      } catch (error) {
+        console.warn(`[ImageGeneration] Failed to detect FPS for ${label}:`, error);
+      }
+    }
 
     const updatedGroups = project.sceneGroups.map((group) => {
       if (group.id === groupId) {
@@ -143,6 +156,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
           path: mediaPath,
           createdAt: Date.now(),
           label,
+          fps, // Add detected FPS for videos
         };
 
         const existingVersions = group.mediaVersions || [];
@@ -430,7 +444,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
 
       if (result.success && result.videoData) {
         const videoUrl = createBlobURL(result.videoData, { groupId, versionLabel: videoLabel });
-        addMediaVersion(groupId, videoUrl, 'video', videoLabel);
+        await addMediaVersion(groupId, videoUrl, 'video', videoLabel);
         updateStatus(groupId, {
           status: "completed",
           imageUrl: videoUrl,
@@ -544,7 +558,17 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
         // Create a managed blob URL instead
         const managedVideoUrl = createBlobURL(file, { groupId, versionLabel: label });
 
-        // Create new media version with quality
+        // Detect FPS for the video
+        let fps: number | undefined;
+        try {
+          const detectedFPS = await detectVideoFPS(managedVideoUrl);
+          fps = detectedFPS ?? undefined; // Convert null to undefined
+          console.log(`[ImageGeneration] Detected FPS for imported video ${label}: ${fps || 'unknown, will use composition default'}`);
+        } catch (error) {
+          console.warn(`[ImageGeneration] Failed to detect FPS for imported video ${label}:`, error);
+        }
+
+        // Create new media version with quality and FPS
         const newVersion: MediaVersion = {
           id: uuidv4(),
           type: 'video',
@@ -552,6 +576,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
           createdAt: Date.now(),
           label,
           quality: result.quality,
+          fps, // Add detected FPS
         };
 
         const updatedGroups = project.sceneGroups.map((g) => {
@@ -620,7 +645,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
       const label = imageCount === 0 ? 'Original Image' : `Image v${imageCount + 1}`;
 
       const imageUrl = createBlobURL(imageFile, { groupId, versionLabel: label });
-      addMediaVersion(groupId, imageUrl, 'image', label);
+      await addMediaVersion(groupId, imageUrl, 'image', label);
       updateStatus(groupId, {
         status: 'completed',
         imageUrl: imageUrl,
@@ -680,7 +705,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
         const label = imageCount === 0 ? 'Original Image' : `Image v${imageCount + 1}`;
 
         const imageUrl = result.imageUrl || createBlobURL(result.imageData!, { groupId, versionLabel: label });
-        addMediaVersion(groupId, imageUrl, 'image', label);
+        await addMediaVersion(groupId, imageUrl, 'image', label);
 
         updateStatus(groupId, {
           status: "completed",
