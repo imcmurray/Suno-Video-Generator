@@ -58,12 +58,22 @@ export const DisplayConfigEditor: React.FC = () => {
   }
 
   // Memoize groups with valid media to prevent re-computation on every render
+  // For reused groups, look up the original group's imagePath
   const groupsWithMedia = useMemo(
-    () => project.sceneGroups?.map((group, index) => ({
-      group,
-      index,
-      hasValidMedia: isValidMediaPath(group.imagePath)
-    })) || [],
+    () => project.sceneGroups?.map((group, index) => {
+      // For reused groups, get imagePath from original group
+      let effectiveImagePath = group.imagePath;
+      if (group.isReusedGroup && group.originalGroupId) {
+        const originalGroup = project.sceneGroups?.find(g => g.id === group.originalGroupId);
+        effectiveImagePath = originalGroup?.imagePath;
+      }
+      return {
+        group,
+        index,
+        hasValidMedia: isValidMediaPath(effectiveImagePath),
+        effectiveImagePath, // Resolved path for reused groups
+      };
+    }) || [],
     [project.sceneGroups]
   );
 
@@ -374,8 +384,12 @@ export const DisplayConfigEditor: React.FC = () => {
 
       {/* Scene Groups Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {groupsWithMedia.map(({ group, index, hasValidMedia }) => {
-          const orientation = detectionStatus.get(group.id);
+        {groupsWithMedia.map(({ group, index, hasValidMedia, effectiveImagePath }) => {
+          // For reused groups, get orientation from original group
+          let orientation = detectionStatus.get(group.id);
+          if (!orientation && group.isReusedGroup && group.originalGroupId) {
+            orientation = detectionStatus.get(group.originalGroupId);
+          }
           const isPortrait = orientation === 'portrait';
 
           // Log each group card render with displayMode (once per group)
@@ -393,7 +407,9 @@ export const DisplayConfigEditor: React.FC = () => {
           // - orientation changes would cause video element recreation
           // - mediaVersions is an array whose reference changes even when contents are identical
           const thumbnailContent = useMemo(() => {
-            const shouldRender = hasValidMedia && group.imagePath && isValidMediaPath(group.imagePath);
+            // Use effectiveImagePath for reused groups (resolves to original group's media)
+            const mediaPath = effectiveImagePath;
+            const shouldRender = hasValidMedia && mediaPath && isValidMediaPath(mediaPath);
 
             if (!shouldRender) {
               return (
@@ -406,7 +422,7 @@ export const DisplayConfigEditor: React.FC = () => {
             }
 
             // Double-check path is valid before rendering media elements
-            if (!group.imagePath || group.imagePath.trim() === '') {
+            if (!mediaPath || mediaPath.trim() === '') {
               return (
                 <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground p-4">
                   <Monitor className="w-12 h-12 mb-2 opacity-50" />
@@ -418,17 +434,25 @@ export const DisplayConfigEditor: React.FC = () => {
             logOnce(`thumbnail-render-${group.id}`, () => {
               console.log(`[Thumbnail] Rendering Group ${index + 1}:`, {
                 groupId: group.id.substring(0, 8),
-                imagePath: group.imagePath.substring(0, 50),
+                imagePath: mediaPath.substring(0, 50),
                 hasValidMedia,
-                isValidPath: isValidMediaPath(group.imagePath)
+                isReused: group.isReusedGroup,
+                isValidPath: isValidMediaPath(mediaPath)
               });
             });
 
-            const isVideo = group.mediaVersions?.find(v => v.id === group.activeMediaId)?.type === 'video';
+            // For reused groups, get media type from original group's mediaVersions
+            let isVideo = false;
+            if (group.isReusedGroup && group.originalGroupId) {
+              const originalGroup = project.sceneGroups?.find(g => g.id === group.originalGroupId);
+              isVideo = originalGroup?.mediaVersions?.find(v => v.id === originalGroup.activeMediaId)?.type === 'video';
+            } else {
+              isVideo = group.mediaVersions?.find(v => v.id === group.activeMediaId)?.type === 'video';
+            }
             const displayMode = group.displayMode || 'cover';
 
             // Only render media elements if we have a valid path
-            if (!group.imagePath || group.imagePath.trim() === '') {
+            if (!mediaPath || mediaPath.trim() === '') {
               return null;
             }
 
@@ -441,7 +465,7 @@ export const DisplayConfigEditor: React.FC = () => {
                   {isVideo ? (
                     <video
                       key={`${group.id}-blur`}
-                      src={group.imagePath}
+                      src={mediaPath}
                       className="absolute w-full h-full"
                       style={{
                         objectFit: 'cover',
@@ -458,7 +482,7 @@ export const DisplayConfigEditor: React.FC = () => {
                   ) : (
                     <img
                       key={`${group.id}-blur`}
-                      src={group.imagePath}
+                      src={mediaPath}
                       alt=""
                       className="absolute w-full h-full"
                       style={{
@@ -475,7 +499,7 @@ export const DisplayConfigEditor: React.FC = () => {
                   {isVideo ? (
                     <video
                       key={group.id}
-                      src={group.imagePath}
+                      src={mediaPath}
                       className="relative w-full h-full"
                       style={{ objectFit: 'contain' }}
                       muted
@@ -494,7 +518,7 @@ export const DisplayConfigEditor: React.FC = () => {
                   ) : (
                     <img
                       key={group.id}
-                      src={group.imagePath}
+                      src={mediaPath}
                       alt={`Group ${index + 1}`}
                       className="relative w-full h-full"
                       style={{ objectFit: 'contain' }}
@@ -520,7 +544,7 @@ export const DisplayConfigEditor: React.FC = () => {
                   {isVideo ? (
                     <video
                       key={group.id}
-                      src={group.imagePath}
+                      src={mediaPath}
                       className="w-full h-full"
                       style={{ objectFit, objectPosition }}
                       muted
@@ -539,7 +563,7 @@ export const DisplayConfigEditor: React.FC = () => {
                   ) : (
                     <img
                       key={group.id}
-                      src={group.imagePath}
+                      src={mediaPath}
                       alt={`Group ${index + 1}`}
                       className="w-full h-full"
                       style={{ objectFit, objectPosition }}
@@ -555,7 +579,7 @@ export const DisplayConfigEditor: React.FC = () => {
                 </>
               );
             }
-          }, [group.id, group.imagePath, group.activeMediaId, group.displayMode, group.coverVerticalPosition, hasValidMedia, index]);
+          }, [group.id, effectiveImagePath, group.activeMediaId, group.displayMode, group.coverVerticalPosition, group.isReusedGroup, group.originalGroupId, hasValidMedia, index, project.sceneGroups]);
 
           return (
             <Card key={group.id} className={isPortrait ? 'border-blue-500 border-2' : ''}>
