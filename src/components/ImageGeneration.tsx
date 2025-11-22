@@ -9,7 +9,7 @@ import { SceneData, SceneGroup, MediaVersion } from "../types";
 import { v4 as uuidv4 } from 'uuid';
 import { ImageModal } from "./ImageModal";
 import { createBlobURL, revokeBlobURL, revokeVersionBlobURL } from "../lib/blob-manager";
-import { detectVideoFPS } from "../lib/media-utils";
+import { detectVideoFPS, detectVideoDuration } from "../lib/media-utils";
 
 interface GenerationStatus {
   id: string; // scene sequence or group ID
@@ -136,15 +136,20 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
   const addMediaVersion = async (groupId: string, mediaPath: string, type: 'image' | 'video', label: string) => {
     if (!project || !project.sceneGroups) return;
 
-    // Detect FPS for video files
+    // Detect FPS and duration for video files
     let fps: number | undefined;
+    let duration: number | undefined;
     if (type === 'video') {
       try {
-        const detectedFPS = await detectVideoFPS(mediaPath);
+        const [detectedFPS, detectedDuration] = await Promise.all([
+          detectVideoFPS(mediaPath),
+          detectVideoDuration(mediaPath),
+        ]);
         fps = detectedFPS ?? undefined; // Convert null to undefined
-        console.log(`[ImageGeneration] Detected FPS for ${label}: ${fps || 'unknown, will use composition default'}`);
+        duration = detectedDuration ?? undefined; // Convert null to undefined
+        console.log(`[ImageGeneration] Detected video metadata for ${label}: FPS=${fps || 'unknown'}, Duration=${duration || 'unknown'}s`);
       } catch (error) {
-        console.warn(`[ImageGeneration] Failed to detect FPS for ${label}:`, error);
+        console.warn(`[ImageGeneration] Failed to detect video metadata for ${label}:`, error);
       }
     }
 
@@ -157,6 +162,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
           createdAt: Date.now(),
           label,
           fps, // Add detected FPS for videos
+          duration, // Add detected duration for videos
         };
 
         const existingVersions = group.mediaVersions || [];
@@ -558,17 +564,22 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
         // Create a managed blob URL instead
         const managedVideoUrl = createBlobURL(file, { groupId, versionLabel: label });
 
-        // Detect FPS for the video
+        // Detect FPS and duration for the video
         let fps: number | undefined;
+        let duration: number | undefined;
         try {
-          const detectedFPS = await detectVideoFPS(managedVideoUrl);
+          const [detectedFPS, detectedDuration] = await Promise.all([
+            detectVideoFPS(managedVideoUrl),
+            detectVideoDuration(managedVideoUrl),
+          ]);
           fps = detectedFPS ?? undefined; // Convert null to undefined
-          console.log(`[ImageGeneration] Detected FPS for imported video ${label}: ${fps || 'unknown, will use composition default'}`);
+          duration = detectedDuration ?? undefined; // Convert null to undefined
+          console.log(`[ImageGeneration] Detected imported video metadata for ${label}: FPS=${fps || 'unknown'}, Duration=${duration || 'unknown'}s`);
         } catch (error) {
-          console.warn(`[ImageGeneration] Failed to detect FPS for imported video ${label}:`, error);
+          console.warn(`[ImageGeneration] Failed to detect video metadata for imported video ${label}:`, error);
         }
 
-        // Create new media version with quality and FPS
+        // Create new media version with quality, FPS, and duration
         const newVersion: MediaVersion = {
           id: uuidv4(),
           type: 'video',
@@ -577,6 +588,7 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
           label,
           quality: result.quality,
           fps, // Add detected FPS
+          duration, // Add detected duration
         };
 
         const updatedGroups = project.sceneGroups.map((g) => {

@@ -20,6 +20,7 @@ export interface MediaVersion {
   quality?: 'SD' | 'HD'; // video quality (auto-detected from resolution/file size)
   exported?: boolean; // true if image has been exported for manual upload
   fps?: number; // video frame rate (for playback rate adjustment)
+  duration?: number; // video duration in seconds (for looping)
 }
 
 // Scene group that combines multiple lyric lines and shares one image/video
@@ -81,6 +82,7 @@ export interface ProjectData {
   lyricLines?: LyricLine[]; // Individual lyric lines from SRT
   sceneGroups?: SceneGroup[]; // Grouped scenes for optimized image generation
   useGrouping?: boolean; // Flag to enable new grouping system
+  outroConfig?: OutroConfig; // Outro/credits configuration
 }
 
 export interface VideoCompositionProps {
@@ -89,6 +91,7 @@ export interface VideoCompositionProps {
   sceneGroups?: SceneGroup[]; // New: use groups if available
   lyricLines?: LyricLine[]; // New: needed to display lyrics within groups
   useGrouping?: boolean; // Flag to use new grouping system
+  outroConfig?: OutroConfig; // Outro/credits configuration
 }
 
 export interface SceneProps {
@@ -102,4 +105,24 @@ export interface SceneGroupProps {
   lyricLines: LyricLine[]; // Lines that belong to this group
   startFrame: number;
   durationInFrames: number;
+}
+
+// Outro/credits configuration
+export interface OutroConfig {
+  enabled: boolean;
+  duration: number; // Duration in seconds (default 20)
+  appName: string;
+  githubUrl: string;
+}
+
+export interface OutroMediaItem {
+  path: string;
+  type: 'image' | 'video';
+}
+
+export interface OutroProps {
+  mediaItems: OutroMediaItem[]; // Array of media items with type information
+  duration: number; // Duration in seconds
+  appName: string;
+  githubUrl: string;
 }

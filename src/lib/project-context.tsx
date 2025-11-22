@@ -1,7 +1,15 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
-import { ProjectData, SceneData } from "../types";
+import { ProjectData, SceneData, OutroConfig } from "../types";
 import { APIProvider } from "./image-api";
 import { revokeAllBlobURLs } from "./blob-manager";
+
+// Default outro configuration
+export const DEFAULT_OUTRO_CONFIG: OutroConfig = {
+  enabled: false,
+  duration: 20,
+  appName: "Suno Video Generator",
+  githubUrl: "github.com/imcmurray/Suno-Video-Generator",
+};
 
 export interface ProjectState extends ProjectData {
   audioFile?: File;
@@ -24,6 +32,7 @@ interface ProjectContextType {
   updateScenes: (scenes: SceneData[]) => void;
   setApiConfig: (provider: APIProvider, apiKey: string) => void;
   updateImageProgress: (progress: Partial<ProjectState["imageGenerationProgress"]>) => void;
+  updateOutroConfig: (updates: Partial<OutroConfig>) => void;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -92,6 +101,17 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
   };
 
+  const updateOutroConfig = (updates: Partial<OutroConfig>) => {
+    if (!project) return;
+    setProjectState({
+      ...project,
+      outroConfig: {
+        ...(project.outroConfig || DEFAULT_OUTRO_CONFIG),
+        ...updates,
+      },
+    });
+  };
+
   return (
     <ProjectContext.Provider
       value={{
@@ -101,6 +121,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         updateScenes,
         setApiConfig,
         updateImageProgress,
+        updateOutroConfig,
       }}
     >
       {children}

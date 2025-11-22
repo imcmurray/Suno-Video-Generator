@@ -18,9 +18,24 @@ export const RemotionRoot: React.FC = () => {
           audioPath: null,
         } as VideoCompositionProps}
         calculateMetadata={({ props }) => {
-          // Calculate actual duration from scenes
-          const lastScene = props.scenes[props.scenes.length - 1];
-          const durationInSeconds = lastScene?.end || 300;
+          // Calculate actual duration from scenes or scene groups
+          let durationInSeconds: number;
+
+          if (props.useGrouping && props.sceneGroups && props.sceneGroups.length > 0) {
+            // Use scene groups if available
+            const lastGroup = props.sceneGroups[props.sceneGroups.length - 1];
+            durationInSeconds = lastGroup.end;
+          } else {
+            // Fallback to legacy scenes
+            const lastScene = props.scenes[props.scenes.length - 1];
+            durationInSeconds = lastScene?.end || 300;
+          }
+
+          // Add outro duration if enabled
+          if (props.outroConfig?.enabled) {
+            durationInSeconds += props.outroConfig.duration;
+          }
+
           const durationInFrames = Math.floor(durationInSeconds * 30);
 
           return {

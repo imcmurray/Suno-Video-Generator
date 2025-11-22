@@ -38,7 +38,7 @@ if (!fs.existsSync(uploadsDir)) {
  */
 router.post("/render", upload.any(), async (req: Request, res: Response) => {
   try {
-    const { scenes, sceneGroups, lyricLines, metadata, useGrouping } = req.body;
+    const { scenes, sceneGroups, lyricLines, metadata, useGrouping, outroConfig } = req.body;
     const files = req.files as Express.Multer.File[];
 
     // Find audio file
@@ -137,19 +137,25 @@ router.post("/render", upload.any(), async (req: Request, res: Response) => {
         });
       }
 
+      // Parse outro config if provided
+      const parsedOutroConfig = outroConfig ? JSON.parse(outroConfig) : undefined;
+
       inputProps = {
         scenes: [], // Empty for backward compatibility
         sceneGroups: groupsWithUrls,
         lyricLines: parsedLines,
         useGrouping: true,
         audioPath: `http://localhost:3002/uploads/${path.basename(audioFile.path)}`,
+        outroConfig: parsedOutroConfig,
       };
     } else {
       // Legacy mode: process scenes
       const parsedScenes = JSON.parse(scenes || "[]");
+      const parsedOutroConfig = outroConfig ? JSON.parse(outroConfig) : undefined;
       inputProps = {
         scenes: parsedScenes,
         audioPath: `http://localhost:3002/uploads/${path.basename(audioFile.path)}`,
+        outroConfig: parsedOutroConfig,
       };
     }
 
@@ -161,6 +167,7 @@ router.post("/render", upload.any(), async (req: Request, res: Response) => {
       sceneGroups: inputProps.sceneGroups,
       lyricLines: inputProps.lyricLines,
       useGrouping: inputProps.useGrouping,
+      outroConfig: inputProps.outroConfig,
       metadata: {
         ...parsedMetadata,
         _tempAudioFilePath: audioFile.path, // Store original path for cleanup

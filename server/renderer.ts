@@ -52,6 +52,7 @@ export async function renderVideo(
         sceneGroups: input.sceneGroups,
         lyricLines: input.lyricLines,
         useGrouping: input.useGrouping,
+        outroConfig: input.outroConfig,
       },
     });
 
@@ -77,6 +78,7 @@ export async function renderVideo(
         sceneGroups: input.sceneGroups,
         lyricLines: input.lyricLines,
         useGrouping: input.useGrouping,
+        outroConfig: input.outroConfig,
       },
       onProgress: ({ progress, renderedFrames, encodedFrames }) => {
         const progressPercent = progress * 100;

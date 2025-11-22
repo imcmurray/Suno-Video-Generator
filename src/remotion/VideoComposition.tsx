@@ -2,6 +2,7 @@ import { AbsoluteFill, Audio, Sequence, useVideoConfig } from "remotion";
 import { VideoCompositionProps } from "../types";
 import { Scene } from "./Scene";
 import { SceneGroup } from "./SceneGroup";
+import { Outro } from "./Outro";
 
 export const VideoComposition = ({
   scenes,
@@ -9,6 +10,7 @@ export const VideoComposition = ({
   sceneGroups,
   lyricLines,
   useGrouping,
+  outroConfig,
 }: VideoCompositionProps) => {
   const { fps } = useVideoConfig();
 
@@ -18,6 +20,7 @@ export const VideoComposition = ({
     sceneGroupsCount: sceneGroups?.length,
     scenesCount: scenes?.length,
     hasAudio: !!audioPath,
+    outroEnabled: outroConfig?.enabled,
   });
 
   // Convert seconds to frames
@@ -125,6 +128,62 @@ export const VideoComposition = ({
           );
         })
       )}
+
+      {/* Outro/Credits Sequence */}
+      {outroConfig?.enabled && (() => {
+        // Calculate outro start time (after last scene/group ends)
+        const lastEndTime = useGrouping && sceneGroups && sceneGroups.length > 0
+          ? sceneGroups[sceneGroups.length - 1].end
+          : scenes[scenes.length - 1]?.end || 0;
+
+        const outroStartFrame = secondsToFrames(lastEndTime);
+        const outroDurationFrames = secondsToFrames(outroConfig.duration);
+
+        // Collect unique VIDEO items from scene groups (excluding reused groups)
+        // Only videos are shown in the outro grid
+        const mediaItems: { path: string; type: 'image' | 'video' }[] = [];
+        const seenPaths = new Set<string>();
+
+        if (sceneGroups) {
+          for (const group of sceneGroups) {
+            if (group.imagePath && !group.isReusedGroup && !seenPaths.has(group.imagePath)) {
+              // Determine media type from mediaVersions
+              const activeVersion = group.mediaVersions?.find(v => v.id === group.activeMediaId);
+              const mediaType = activeVersion?.type || 'image';
+
+              // Only include videos in the outro
+              if (mediaType === 'video') {
+                seenPaths.add(group.imagePath);
+                mediaItems.push({
+                  path: group.imagePath,
+                  type: mediaType,
+                });
+              }
+            }
+          }
+        }
+
+        console.log('[VideoComposition] 🎬 Outro enabled:', {
+          outroStartFrame,
+          outroDurationFrames,
+          videoCount: mediaItems.length,
+        });
+
+        return (
+          <Sequence
+            key="outro"
+            from={outroStartFrame}
+            durationInFrames={outroDurationFrames}
+          >
+            <Outro
+              mediaItems={mediaItems}
+              duration={outroConfig.duration}
+              appName={outroConfig.appName}
+              githubUrl={outroConfig.githubUrl}
+            />
+          </Sequence>
+        );
+      })()}
     </AbsoluteFill>
   );
 };

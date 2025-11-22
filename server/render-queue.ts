@@ -18,6 +18,12 @@ export interface RenderJobInput {
   lyricLines?: any[];
   useGrouping?: boolean;
   metadata: any;
+  outroConfig?: {
+    enabled: boolean;
+    duration: number;
+    appName: string;
+    githubUrl: string;
+  };
 }
 
 class RenderQueue {

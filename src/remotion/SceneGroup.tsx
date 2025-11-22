@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, Img, OffthreadVideo, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Img, OffthreadVideo, Loop, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { SceneGroupProps, SceneGroup as SceneGroupType } from "../types";
 
 // Helper to determine media type from MediaVersions array (works with blob URLs)
@@ -160,16 +160,34 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
   // Check if the media is a video file using MediaVersions metadata
   const isVideo = getMediaType(sceneGroup) === 'video';
 
+  // Get the active media version for video metadata
+  const activeVersion = isVideo && sceneGroup.activeMediaId && sceneGroup.mediaVersions
+    ? sceneGroup.mediaVersions.find(v => v.id === sceneGroup.activeMediaId)
+    : null;
+
   // Calculate playback rate based on video FPS (normalize to composition FPS of 30)
   let playbackRate = 1;
-  if (isVideo && sceneGroup.activeMediaId && sceneGroup.mediaVersions) {
-    const activeVersion = sceneGroup.mediaVersions.find(v => v.id === sceneGroup.activeMediaId);
-    if (activeVersion?.fps) {
-      playbackRate = activeVersion.fps / fps; // fps is composition FPS (30)
-      if (frame === 0) {
-        console.log(`[SceneGroup] 🎬 Applying playbackRate: ${playbackRate.toFixed(2)} (video: ${activeVersion.fps}fps / composition: ${fps}fps)`);
-      }
+  if (activeVersion?.fps) {
+    playbackRate = activeVersion.fps / fps; // fps is composition FPS (30)
+    if (frame === 0) {
+      console.log(`[SceneGroup] 🎬 Applying playbackRate: ${playbackRate.toFixed(2)} (video: ${activeVersion.fps}fps / composition: ${fps}fps)`);
     }
+  }
+
+  // Get actual video duration from MediaVersion, or default to 6 seconds
+  const videoDurationSeconds = activeVersion?.duration || 6;
+  const videoLoopDuration = Math.ceil(videoDurationSeconds * fps);
+
+  // Determine if video should loop (if group duration > actual video duration)
+  const shouldLoop = sceneGroup.duration > videoDurationSeconds;
+
+  if (frame === 0 && isVideo) {
+    console.log(`[SceneGroup] 🎬 Video loop config:`, {
+      videoDuration: videoDurationSeconds,
+      videoLoopDuration,
+      groupDuration: sceneGroup.duration,
+      shouldLoop,
+    });
   }
 
   // Calculate current time and find active lyric line
@@ -177,9 +195,6 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
   const activeLyricLine = lyricLines.find(
     (line) => currentTime >= line.start && currentTime < line.end
   );
-
-  // Determine if video should loop (if group duration > 6s)
-  const shouldLoop = sceneGroup.duration > 6;
 
   return (
     <AbsoluteFill
@@ -198,23 +213,43 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
               {frame === 0 && console.log('[SceneGroup] 📺 Creating 2 media elements for contain-blur mode')}
               {/* Blurred background layer */}
               {isVideo ? (
-                <OffthreadVideo
-                  src={sceneGroup.imagePath}
-                  loop={shouldLoop}
-                  muted={true}
-                  playbackRate={playbackRate}
-                  delayRenderTimeoutInMilliseconds={60000}
-                  style={{
-                    position: "absolute",
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    filter: "blur(40px)",
-                    opacity: 0.6,
-                    transform: `scale(1.2)`, // Prevent blur edge artifacts
-                  }}
-                  onError={() => frame === 0 && console.log('[SceneGroup] ❌ Video error (blurred background)')}
-                />
+                shouldLoop ? (
+                  <Loop durationInFrames={videoLoopDuration}>
+                    <OffthreadVideo
+                      src={sceneGroup.imagePath}
+                      muted={true}
+                      playbackRate={playbackRate}
+                      delayRenderTimeoutInMilliseconds={60000}
+                      style={{
+                        position: "absolute",
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        filter: "blur(40px)",
+                        opacity: 0.6,
+                        transform: `scale(1.2)`,
+                      }}
+                      onError={() => frame === 0 && console.log('[SceneGroup] ❌ Video error (blurred background)')}
+                    />
+                  </Loop>
+                ) : (
+                  <OffthreadVideo
+                    src={sceneGroup.imagePath}
+                    muted={true}
+                    playbackRate={playbackRate}
+                    delayRenderTimeoutInMilliseconds={60000}
+                    style={{
+                      position: "absolute",
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      filter: "blur(40px)",
+                      opacity: 0.6,
+                      transform: `scale(1.2)`,
+                    }}
+                    onError={() => frame === 0 && console.log('[SceneGroup] ❌ Video error (blurred background)')}
+                  />
+                )
               ) : (
                 <Img
                   src={sceneGroup.imagePath}
@@ -233,21 +268,39 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
 
               {/* Main content layer (contained) */}
               {isVideo ? (
-                <OffthreadVideo
-                  src={sceneGroup.imagePath}
-                  loop={shouldLoop}
-                  muted={true}
-                  playbackRate={playbackRate}
-                  delayRenderTimeoutInMilliseconds={60000}
-                  style={{
-                    position: "relative",
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "contain",
-                    transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
-                  }}
-                  onError={() => frame === 0 && console.log('[SceneGroup] ❌ Video error (main content)')}
-                />
+                shouldLoop ? (
+                  <Loop durationInFrames={videoLoopDuration}>
+                    <OffthreadVideo
+                      src={sceneGroup.imagePath}
+                      muted={true}
+                      playbackRate={playbackRate}
+                      delayRenderTimeoutInMilliseconds={60000}
+                      style={{
+                        position: "relative",
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "contain",
+                        transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
+                      }}
+                      onError={() => frame === 0 && console.log('[SceneGroup] ❌ Video error (main content)')}
+                    />
+                  </Loop>
+                ) : (
+                  <OffthreadVideo
+                    src={sceneGroup.imagePath}
+                    muted={true}
+                    playbackRate={playbackRate}
+                    delayRenderTimeoutInMilliseconds={60000}
+                    style={{
+                      position: "relative",
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "contain",
+                      transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
+                    }}
+                    onError={() => frame === 0 && console.log('[SceneGroup] ❌ Video error (main content)')}
+                  />
+                )
               ) : (
                 <Img
                   src={sceneGroup.imagePath}
@@ -266,22 +319,41 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
             /* Cover or Contain mode (single layer) */
             <>
               {isVideo ? (
-                <OffthreadVideo
-                  src={sceneGroup.imagePath}
-                  loop={shouldLoop}
-                  muted={true}
-                  playbackRate={playbackRate}
-                  delayRenderTimeoutInMilliseconds={60000}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: sceneGroup.displayMode === 'contain' ? 'contain' : 'cover',
-                    objectPosition: sceneGroup.displayMode === 'cover'
-                      ? `center ${sceneGroup.coverVerticalPosition ?? 50}%`
-                      : 'center',
-                    transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
-                  }}
-                />
+                shouldLoop ? (
+                  <Loop durationInFrames={videoLoopDuration}>
+                    <OffthreadVideo
+                      src={sceneGroup.imagePath}
+                      muted={true}
+                      playbackRate={playbackRate}
+                      delayRenderTimeoutInMilliseconds={60000}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: sceneGroup.displayMode === 'contain' ? 'contain' : 'cover',
+                        objectPosition: sceneGroup.displayMode === 'cover'
+                          ? `center ${sceneGroup.coverVerticalPosition ?? 50}%`
+                          : 'center',
+                        transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
+                      }}
+                    />
+                  </Loop>
+                ) : (
+                  <OffthreadVideo
+                    src={sceneGroup.imagePath}
+                    muted={true}
+                    playbackRate={playbackRate}
+                    delayRenderTimeoutInMilliseconds={60000}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: sceneGroup.displayMode === 'contain' ? 'contain' : 'cover',
+                      objectPosition: sceneGroup.displayMode === 'cover'
+                        ? `center ${sceneGroup.coverVerticalPosition ?? 50}%`
+                        : 'center',
+                      transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
+                    }}
+                  />
+                )
               ) : (
                 <Img
                   src={sceneGroup.imagePath}

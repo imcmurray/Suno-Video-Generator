@@ -130,11 +130,17 @@ export const VideoPreview: React.FC = () => {
   const usingGrouping = project.useGrouping && project.sceneGroups && project.lyricLines;
 
   // Calculate total duration in frames
-  const totalDurationSeconds = usingGrouping
+  let totalDurationSeconds = usingGrouping
     ? (project.sceneGroups && project.sceneGroups.length > 0
         ? project.sceneGroups[project.sceneGroups.length - 1].end
         : 60)
     : (project.scenes[project.scenes.length - 1]?.end || 60);
+
+  // Add outro duration if enabled
+  if (project.outroConfig?.enabled) {
+    totalDurationSeconds += project.outroConfig.duration;
+  }
+
   const durationInFrames = Math.floor(totalDurationSeconds * fps);
 
   const compositionProps = {
@@ -143,6 +149,7 @@ export const VideoPreview: React.FC = () => {
     sceneGroups: project.sceneGroups,
     lyricLines: project.lyricLines,
     useGrouping: project.useGrouping,
+    outroConfig: project.outroConfig,
   };
 
   // Show loading message while audio is being prefetched
@@ -240,6 +247,11 @@ export const VideoPreview: React.FC = () => {
       }
 
       formData.append("metadata", JSON.stringify(project.metadata));
+
+      // Include outro configuration if enabled
+      if (project.outroConfig) {
+        formData.append("outroConfig", JSON.stringify(project.outroConfig));
+      }
 
       // Start render job
       console.log("Starting render job...");

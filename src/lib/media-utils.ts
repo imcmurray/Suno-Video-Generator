@@ -356,3 +356,60 @@ export async function detectVideoFPS(videoPath: string): Promise<number | null> 
     video.src = videoPath;
   });
 }
+
+/**
+ * Detect the duration of a video file in seconds
+ * @param videoPath - Blob URL or file path to the video
+ * @returns Promise resolving to the duration in seconds, or null if detection fails
+ */
+export async function detectVideoDuration(videoPath: string): Promise<number | null> {
+  if (!videoPath || videoPath.trim() === '') {
+    console.warn('[detectVideoDuration] Invalid video path');
+    return null;
+  }
+
+  return new Promise((resolve) => {
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted = true;
+
+    // Timeout after 5 seconds
+    const timeout = setTimeout(() => {
+      video.removeAttribute('src');
+      video.load();
+      video.remove();
+      console.warn('[detectVideoDuration] Timeout detecting duration for:', videoPath.substring(0, 50));
+      resolve(null);
+    }, 5000);
+
+    video.onloadedmetadata = () => {
+      clearTimeout(timeout);
+
+      const duration = video.duration;
+      console.log('[detectVideoDuration] Detected duration:', duration, 'seconds for:', videoPath.substring(0, 50));
+
+      video.removeAttribute('src');
+      video.load();
+      video.remove();
+
+      // Check for valid duration (not NaN, Infinity, or 0)
+      if (duration && isFinite(duration) && duration > 0) {
+        resolve(duration);
+      } else {
+        console.warn('[detectVideoDuration] Invalid duration value:', duration);
+        resolve(null);
+      }
+    };
+
+    video.onerror = () => {
+      clearTimeout(timeout);
+      video.removeAttribute('src');
+      video.load();
+      video.remove();
+      console.warn('[detectVideoDuration] Error loading video for duration detection:', videoPath.substring(0, 50));
+      resolve(null);
+    };
+
+    video.src = videoPath;
+  });
+}

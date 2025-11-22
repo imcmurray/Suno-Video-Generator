@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { Monitor, Maximize2, Sparkles, Play, CheckCircle2 } from "lucide-react";
+import { Monitor, Maximize2, Sparkles, Play, CheckCircle2, Film } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { useProject } from "../lib/project-context";
+import { useProject, DEFAULT_OUTRO_CONFIG } from "../lib/project-context";
 import { detectMediaOrientation, suggestDisplayMode, type MediaOrientation } from "../lib/media-utils";
 import { isValidBlobURL } from "../lib/blob-manager";
 
@@ -48,7 +48,7 @@ const isValidMediaPath = (path: string | undefined): boolean => {
 };
 
 export const DisplayConfigEditor: React.FC = () => {
-  const { project, setProject } = useProject();
+  const { project, setProject, updateOutroConfig } = useProject();
   const [detectionStatus, setDetectionStatus] = useState<Map<string, MediaOrientation>>(new Map());
   const [isDetecting, setIsDetecting] = useState(false);
   const hasRunDetection = useRef(false);
@@ -379,6 +379,52 @@ export const DisplayConfigEditor: React.FC = () => {
           <Button onClick={resetToDefaults} variant="outline">
             Reset All to Defaults
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* Outro/Credits Settings */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Film className="w-5 h-5" />
+            Outro Credits Sequence
+          </CardTitle>
+          <CardDescription>
+            Add a credits sequence at the end showing all videos used, AI credits, and branding
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium">Enable Outro</p>
+              <p className="text-sm text-muted-foreground">
+                20-second credits sequence with ripple animation
+              </p>
+            </div>
+            <Button
+              variant={project.outroConfig?.enabled ? "default" : "outline"}
+              onClick={() => {
+                const currentConfig = project.outroConfig || DEFAULT_OUTRO_CONFIG;
+                updateOutroConfig({ enabled: !currentConfig.enabled });
+              }}
+            >
+              {project.outroConfig?.enabled ? "Enabled" : "Disabled"}
+            </Button>
+          </div>
+
+          {project.outroConfig?.enabled && (
+            <div className="pt-4 border-t space-y-3">
+              <div className="text-sm">
+                <p className="font-medium mb-2">Outro will include:</p>
+                <ul className="list-disc list-inside text-muted-foreground space-y-1">
+                  <li>Ripple animation of all video thumbnails</li>
+                  <li>AI credits (Grok, Suno AI, Claude/Grok/ChatGPT)</li>
+                  <li>App name: {project.outroConfig?.appName || DEFAULT_OUTRO_CONFIG.appName}</li>
+                  <li>GitHub: {project.outroConfig?.githubUrl || DEFAULT_OUTRO_CONFIG.githubUrl}</li>
+                </ul>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
