@@ -28,15 +28,15 @@ export const VideoComposition = ({
   const transitionDurationFrames = secondsToFrames(transitionDurationSeconds);
 
   // Debug audio
-  console.log("VideoComposition audioPath:", audioPath ? `${audioPath.substring(0, 50)}...` : "MISSING");
+  console.log("VideoComposition audioPath:", audioPath || "MISSING");
 
   return (
     <AbsoluteFill style={{ backgroundColor: "black" }}>
-      {/* Audio track */}
+      {/* Audio track - Audio component works in both Player preview and final render */}
       {audioPath && (
         <>
-          <Audio src={audioPath} volume={1.0} startFrom={0} />
-          {console.log("✓ Audio component rendered with volume 1.0, startFrom 0")}
+          <Audio src={audioPath} volume={1} />
+          {console.log("✓ Audio component rendered with src:", audioPath)}
         </>
       )}
       {!audioPath && console.error("✗ No audioPath provided to VideoComposition")}

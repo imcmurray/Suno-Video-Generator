@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect } from "react";
-import { Player } from "@remotion/player";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { Player, PlayerRef } from "@remotion/player";
 import { prefetch } from "remotion";
 import { Play, Download, FileVideo, Save, FileArchive, FileText, FileJson } from "lucide-react";
 import { Button } from "./ui/button";
@@ -17,67 +17,119 @@ export const VideoPreview: React.FC = () => {
 
   if (!project || !project.audioFile) return null;
 
-  // Use blob URL with Remotion prefetch for audio
+  // FPS constant
+  const fps = 30;
+
+  // Refs for syncing audio with Player
+  const playerRef = useRef<PlayerRef>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  // Create blob URL for audio
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [prefetchHandle, setPrefetchHandle] = useState<ReturnType<typeof prefetch> | null>(null);
 
   useEffect(() => {
+    let cleanup: (() => void) | undefined;
+
     const setupAudio = async () => {
-      try {
-        console.log("Setting up audio with Remotion prefetch...");
-        console.log("Audio file type:", project.audioFile!.type);
-        console.log("Audio file size:", project.audioFile!.size, "bytes");
+      console.log("Setting up audio with prefetch...");
+      console.log("Audio file type:", project.audioFile!.type);
+      console.log("Audio file size:", project.audioFile!.size, "bytes");
 
-        // Create blob URL directly from File object (no conversion needed)
-        const blobUrl = URL.createObjectURL(project.audioFile!);
-        console.log("✓ Blob URL created:", blobUrl);
+      const blobUrl = URL.createObjectURL(project.audioFile!);
+      console.log("✓ Audio blob URL created:", blobUrl);
 
-        // Normalize MIME type for better browser compatibility
-        let contentType = project.audioFile!.type || "audio/wav";
-        if (contentType === "audio/vnd.wave" || contentType === "audio/x-wav") {
-          contentType = "audio/wav";
-        }
-        console.log("Using content type:", contentType);
+      // Prefetch the audio so Remotion Player can use it
+      console.log("Prefetching audio for Remotion...");
+      const { free, waitUntilDone } = prefetch(blobUrl, {
+        method: "blob-url",
+      });
 
-        // Prefetch with Remotion's API - tells Player the audio is ready
-        const handle = prefetch(blobUrl, {
-          method: "blob-url",
-          contentType: contentType,
-        });
+      await waitUntilDone();
+      console.log("✓ Audio prefetch complete");
+      setAudioUrl(blobUrl);
 
-        setPrefetchHandle(handle);
-
-        // Wait for prefetch to complete
-        console.log("Prefetching audio...");
-        await handle.waitUntilDone();
-        console.log("✓ Audio prefetch complete and ready for playback");
-
-        setAudioUrl(blobUrl);
-      } catch (error) {
-        console.error("✗ Failed to setup audio:", error);
-      }
+      cleanup = () => {
+        console.log("Cleaning up audio resources");
+        free();
+        URL.revokeObjectURL(blobUrl);
+      };
     };
 
     setupAudio();
 
-    // Cleanup function
-    return () => {
-      if (prefetchHandle) {
-        console.log("Cleaning up prefetch handle");
-        prefetchHandle.free();
-      }
-      if (audioUrl) {
-        console.log("Revoking blob URL");
-        URL.revokeObjectURL(audioUrl);
+    return () => cleanup?.();
+  }, [project.audioFile]);
+
+  // Sync HTML5 audio with Remotion Player
+  useEffect(() => {
+    const player = playerRef.current;
+    const audio = audioRef.current;
+
+    if (!player || !audio || !audioUrl) return;
+
+    console.log("[Audio Sync] Setting up audio synchronization");
+
+    // Handle play event
+    const handlePlay = () => {
+      console.log("[Audio Sync] Player started playing");
+      setIsPlaying(true);
+      const currentFrame = player.getCurrentFrame();
+      const currentTime = currentFrame / fps;
+      audio.currentTime = currentTime;
+      audio.play().catch(err => console.error("[Audio Sync] Play failed:", err));
+    };
+
+    // Handle pause event
+    const handlePause = () => {
+      console.log("[Audio Sync] Player paused");
+      setIsPlaying(false);
+      audio.pause();
+    };
+
+    // Handle seek event
+    const handleSeek = (e: { detail: { frame: number } }) => {
+      const currentTime = e.detail.frame / fps;
+      console.log("[Audio Sync] Seeking to:", currentTime.toFixed(2), "seconds");
+      audio.currentTime = currentTime;
+    };
+
+    // Handle frame update for time sync (throttled)
+    let lastSyncFrame = 0;
+    const handleFrameUpdate = (e: { detail: { frame: number } }) => {
+      // Only sync every 30 frames (1 second) to avoid overhead
+      if (Math.abs(e.detail.frame - lastSyncFrame) > 30) {
+        lastSyncFrame = e.detail.frame;
+        const expectedTime = e.detail.frame / fps;
+        const actualTime = audio.currentTime;
+        const drift = Math.abs(expectedTime - actualTime);
+
+        // Re-sync if drift exceeds 0.2 seconds
+        if (drift > 0.2 && isPlaying) {
+          console.log("[Audio Sync] Correcting drift:", drift.toFixed(3), "seconds");
+          audio.currentTime = expectedTime;
+        }
       }
     };
-  }, [project.audioFile]);
+
+    // Subscribe to Player events
+    player.addEventListener("play", handlePlay);
+    player.addEventListener("pause", handlePause);
+    player.addEventListener("seeked", handleSeek as any);
+    player.addEventListener("frameupdate", handleFrameUpdate as any);
+
+    return () => {
+      player.removeEventListener("play", handlePlay);
+      player.removeEventListener("pause", handlePause);
+      player.removeEventListener("seeked", handleSeek as any);
+      player.removeEventListener("frameupdate", handleFrameUpdate as any);
+    };
+  }, [audioUrl, fps, isPlaying]);
 
   // Check if using grouping mode
   const usingGrouping = project.useGrouping && project.sceneGroups && project.lyricLines;
 
-  // Calculate total duration in frames (30 fps)
-  const fps = 30;
+  // Calculate total duration in frames
   const totalDurationSeconds = usingGrouping
     ? (project.sceneGroups && project.sceneGroups.length > 0
         ? project.sceneGroups[project.sceneGroups.length - 1].end
@@ -335,6 +387,7 @@ export const VideoPreview: React.FC = () => {
             <CardContent>
               <div className="bg-black rounded-lg overflow-hidden">
                 <Player
+                  ref={playerRef}
                   component={VideoComposition as any}
                   inputProps={compositionProps}
                   durationInFrames={durationInFrames}
@@ -353,9 +406,20 @@ export const VideoPreview: React.FC = () => {
                   initiallyShowControls={5000}
                   spaceKeyToPlayOrPause={true}
                   autoPlay={false}
-                  initialVolume={1}
+                  initiallyMuted={true}
+                  numberOfSharedAudioTags={0}
                 />
               </div>
+
+              {/* Hidden HTML5 audio element synced with Player */}
+              {audioUrl && (
+                <audio
+                  ref={audioRef}
+                  src={audioUrl}
+                  preload="auto"
+                  style={{ display: "none" }}
+                />
+              )}
 
               {/* Scene/Group Timeline */}
               <div className="mt-4 space-y-2">
