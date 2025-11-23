@@ -482,6 +482,9 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
       let successCount = 0;
       let fallbackCount = 0;
 
+      // Accumulate ALL updates across ALL batches
+      const allGroupUpdates: Record<number, { enhancedPrompt: string; selectedPromptType: "enhanced" }> = {};
+
       // Process prompts in batches
       for (let batchStart = 0; batchStart < basicPrompts.length; batchStart += BATCH_SIZE) {
         const batchEnd = Math.min(batchStart + BATCH_SIZE, basicPrompts.length);
@@ -531,9 +534,7 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
         // Wait for all prompts in batch to complete
         const batchResults = await Promise.all(batchPromises);
 
-        // Accumulate all updates from this batch
-        const groupUpdates: Record<number, { enhancedPrompt: string; selectedPromptType: "enhanced" }> = {};
-
+        // Accumulate updates from this batch into allGroupUpdates
         batchResults.forEach(({ index, batchIndex, enhanced, success }) => {
           if (success) {
             successCount++;
@@ -542,7 +543,7 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
           }
 
           // Accumulate update using actual group index
-          groupUpdates[index] = {
+          allGroupUpdates[index] = {
             enhancedPrompt: enhanced,
             selectedPromptType: "enhanced" as const,
           };
@@ -554,20 +555,21 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
           });
         });
 
-        // Apply all batch updates in SINGLE setState call with functional update
-        setProject(prevProject => ({
-          ...prevProject,
-          sceneGroups: prevProject.sceneGroups!.map((g, idx) =>
-            groupUpdates[idx]
+        console.log(`✓ Batch complete. Accumulated ${Object.keys(allGroupUpdates).length} total prompts.`);
+
+        // Update state after each batch using ALL accumulated updates so far
+        // This shows the AI Enhanced tag progressively while preserving previous updates
+        setProject({
+          ...project,
+          sceneGroups: project.sceneGroups!.map((g, idx) =>
+            allGroupUpdates[idx]
               ? {
                   ...g,
-                  ...groupUpdates[idx],
+                  ...allGroupUpdates[idx],
                 }
               : g
           ),
-        }));
-
-        console.log(`✓ Batch complete. Updated ${batchResults.length} prompts in state.`);
+        });
 
         // Delay between batches (not individual calls)
         if (batchEnd < basicPrompts.length) {
@@ -580,7 +582,8 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
       console.log(`Total prompts: ${basicPrompts.length}`);
       console.log(`Successfully enhanced: ${successCount}`);
       console.log(`Fell back to basic: ${fallbackCount}`);
-      console.log('✓ All prompts enhanced and state updated incrementally!');
+      console.log(`Total groups updated: ${Object.keys(allGroupUpdates).length}`);
+      console.log('✓ All prompts enhanced and state updated!');
 
       // Set success summary
       setEnhancementSuccess({
