@@ -10,6 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { ImageModal } from "./ImageModal";
 import { createBlobURL, revokeBlobURL, revokeVersionBlobURL } from "../lib/blob-manager";
 import { detectVideoFPS, detectVideoDuration } from "../lib/media-utils";
+import { formatTime } from "../lib/utils";
 
 interface GenerationStatus {
   id: string; // scene sequence or group ID
@@ -1013,6 +1014,9 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
                       </div>
                       <p className="text-xs text-muted-foreground truncate">
                         {group.combinedLyrics}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatTime(group.start)} - {formatTime(group.end)} ({group.duration.toFixed(1)}s)
                       </p>
 
                       {/* Prompt Editing */}
