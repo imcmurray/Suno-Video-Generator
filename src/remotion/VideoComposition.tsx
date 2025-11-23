@@ -3,6 +3,7 @@ import { VideoCompositionProps } from "../types";
 import { Scene } from "./Scene";
 import { SceneGroup } from "./SceneGroup";
 import { Outro } from "./Outro";
+import { SongInfoOverlay } from "./SongInfoOverlay";
 
 export const VideoComposition = ({
   scenes,
@@ -11,6 +12,7 @@ export const VideoComposition = ({
   lyricLines,
   useGrouping,
   outroConfig,
+  songInfoConfig,
 }: VideoCompositionProps) => {
   const { fps } = useVideoConfig();
 
@@ -187,6 +189,23 @@ export const VideoComposition = ({
           </Sequence>
         );
       })()}
+
+      {/* Song Info Overlay - renders on top of everything at the start */}
+      {songInfoConfig?.enabled && (songInfoConfig.songTitle || songInfoConfig.artistName) && (
+        <Sequence
+          key="song-info"
+          from={0}
+          durationInFrames={secondsToFrames(songInfoConfig.displayDuration)}
+        >
+          <SongInfoOverlay
+            songTitle={songInfoConfig.songTitle}
+            artistName={songInfoConfig.artistName}
+            showStyle={songInfoConfig.showStyle}
+            style={songInfoConfig.style}
+            displayDuration={songInfoConfig.displayDuration}
+          />
+        </Sequence>
+      )}
     </AbsoluteFill>
   );
 };

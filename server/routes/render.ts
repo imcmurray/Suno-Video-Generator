@@ -38,7 +38,7 @@ if (!fs.existsSync(uploadsDir)) {
  */
 router.post("/render", upload.any(), async (req: Request, res: Response) => {
   try {
-    const { scenes, sceneGroups, lyricLines, metadata, useGrouping, outroConfig } = req.body;
+    const { scenes, sceneGroups, lyricLines, metadata, useGrouping, outroConfig, songInfoConfig } = req.body;
     const files = req.files as Express.Multer.File[];
 
     // Find audio file
@@ -175,6 +175,12 @@ router.post("/render", upload.any(), async (req: Request, res: Response) => {
         });
       }
 
+      // Parse song info config (simple JSON, no file handling needed)
+      const parsedSongInfoConfig = songInfoConfig ? JSON.parse(songInfoConfig) : undefined;
+      if (parsedSongInfoConfig) {
+        console.log('[Render] Received songInfoConfig:', JSON.stringify(parsedSongInfoConfig));
+      }
+
       inputProps = {
         scenes: [], // Empty for backward compatibility
         sceneGroups: groupsWithUrls,
@@ -182,6 +188,7 @@ router.post("/render", upload.any(), async (req: Request, res: Response) => {
         useGrouping: true,
         audioPath: `http://localhost:3002/uploads/${path.basename(audioFile.path)}`,
         outroConfig: parsedOutroConfig,
+        songInfoConfig: parsedSongInfoConfig,
       };
     } else {
       // Legacy mode: process scenes
@@ -202,10 +209,14 @@ router.post("/render", upload.any(), async (req: Request, res: Response) => {
         }
       }
 
+      // Parse song info config for legacy mode too
+      const parsedSongInfoConfig = songInfoConfig ? JSON.parse(songInfoConfig) : undefined;
+
       inputProps = {
         scenes: parsedScenes,
         audioPath: `http://localhost:3002/uploads/${path.basename(audioFile.path)}`,
         outroConfig: parsedOutroConfig,
+        songInfoConfig: parsedSongInfoConfig,
       };
     }
 
@@ -218,6 +229,7 @@ router.post("/render", upload.any(), async (req: Request, res: Response) => {
       lyricLines: inputProps.lyricLines,
       useGrouping: inputProps.useGrouping,
       outroConfig: inputProps.outroConfig,
+      songInfoConfig: inputProps.songInfoConfig,
       metadata: {
         ...parsedMetadata,
         _tempAudioFilePath: audioFile.path, // Store original path for cleanup

@@ -252,6 +252,8 @@ export async function exportCompleteProject(project: ProjectState): Promise<void
       githubQrImage: undefined, // Will be restored from manifest
       bitcoinQrImage: undefined,
     } : undefined,
+    // Save song info config (simple JSON, no binary files)
+    songInfoConfig: project.songInfoConfig,
   };
 
   zip.file("project.json", JSON.stringify(projectData, null, 2));
@@ -476,6 +478,7 @@ export async function importCompleteProject(
       ...projectData,
       sceneGroups,
       outroConfig: restoredOutroConfig,
+      songInfoConfig: projectData.songInfoConfig, // Restore song info config (no binary files to handle)
     },
     audioFile: audioFileObj,
   };

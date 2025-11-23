@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
-import { ProjectData, SceneData, OutroConfig } from "../types";
+import { ProjectData, SceneData, OutroConfig, SongInfoConfig } from "../types";
 import { APIProvider } from "./image-api";
 import { revokeAllBlobURLs } from "./blob-manager";
 
@@ -10,6 +10,16 @@ export const DEFAULT_OUTRO_CONFIG: OutroConfig = {
   appName: "Suno Video Generator",
   githubUrl: "github.com/imcmurray/Suno-Video-Generator",
   aiCredits: "Videos by Grok • Music by Suno AI • Lyrics by Claude, Grok & ChatGPT",
+};
+
+// Default song info overlay configuration
+export const DEFAULT_SONG_INFO_CONFIG: SongInfoConfig = {
+  enabled: false,
+  songTitle: "",
+  artistName: "",
+  showStyle: true,
+  style: "",
+  displayDuration: 5,
 };
 
 export interface ProjectState extends ProjectData {
@@ -34,6 +44,7 @@ interface ProjectContextType {
   setApiConfig: (provider: APIProvider, apiKey: string) => void;
   updateImageProgress: (progress: Partial<ProjectState["imageGenerationProgress"]>) => void;
   updateOutroConfig: (updates: Partial<OutroConfig>) => void;
+  updateSongInfoConfig: (updates: Partial<SongInfoConfig>) => void;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -113,6 +124,17 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
   };
 
+  const updateSongInfoConfig = (updates: Partial<SongInfoConfig>) => {
+    if (!project) return;
+    setProjectState({
+      ...project,
+      songInfoConfig: {
+        ...(project.songInfoConfig || DEFAULT_SONG_INFO_CONFIG),
+        ...updates,
+      },
+    });
+  };
+
   return (
     <ProjectContext.Provider
       value={{
@@ -123,6 +145,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         setApiConfig,
         updateImageProgress,
         updateOutroConfig,
+        updateSongInfoConfig,
       }}
     >
       {children}

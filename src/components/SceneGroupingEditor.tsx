@@ -20,6 +20,7 @@ import {
 } from './ui/card';
 import { Label } from './ui/label';
 import { useProject } from '../lib/project-context';
+import { formatTime } from '../lib/utils';
 import { LyricLine, SceneGroup } from '../types';
 import {
   createOptimizedSceneGroups,
@@ -414,7 +415,7 @@ export const SceneGroupingEditor: React.FC<SceneGroupingEditorProps> = ({
                             </span>
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            {line.start.toFixed(1)}s - {line.end.toFixed(1)}s (
+                            {formatTime(line.start)} - {formatTime(line.end)} (
                             {line.duration.toFixed(1)}s)
                           </p>
                         </div>
@@ -453,7 +454,7 @@ export const SceneGroupingEditor: React.FC<SceneGroupingEditorProps> = ({
                             </div>
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            {gap.start.toFixed(1)}s - {gap.end.toFixed(1)}s (
+                            {formatTime(gap.start)} - {formatTime(gap.end)} (
                             {gap.duration.toFixed(1)}s)
                           </p>
                           <p className="text-xs text-muted-foreground mt-1 italic">
@@ -523,7 +524,7 @@ export const SceneGroupingEditor: React.FC<SceneGroupingEditorProps> = ({
                             {group.combinedLyrics}
                           </p>
                           <p className="text-xs text-muted-foreground mb-2">
-                            {group.start.toFixed(1)}s - {group.end.toFixed(1)}s (
+                            {formatTime(group.start)} - {formatTime(group.end)} (
                             {group.duration.toFixed(1)}s) • {groupLines.length}{' '}
                             line(s)
                           </p>

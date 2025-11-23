@@ -83,6 +83,7 @@ export interface ProjectData {
   sceneGroups?: SceneGroup[]; // Grouped scenes for optimized image generation
   useGrouping?: boolean; // Flag to enable new grouping system
   outroConfig?: OutroConfig; // Outro/credits configuration
+  songInfoConfig?: SongInfoConfig; // Song info overlay configuration
 }
 
 export interface VideoCompositionProps {
@@ -92,6 +93,7 @@ export interface VideoCompositionProps {
   lyricLines?: LyricLine[]; // New: needed to display lyrics within groups
   useGrouping?: boolean; // Flag to use new grouping system
   outroConfig?: OutroConfig; // Outro/credits configuration
+  songInfoConfig?: SongInfoConfig; // Song info overlay configuration
 }
 
 export interface SceneProps {
@@ -131,4 +133,22 @@ export interface OutroProps {
   aiCredits: string; // Customizable AI credits text
   githubQrImage?: string; // Blob URL for GitHub QR code image
   bitcoinQrImage?: string; // Blob URL for Bitcoin QR code image
+}
+
+// Song info overlay configuration (shown at start of video)
+export interface SongInfoConfig {
+  enabled: boolean;
+  songTitle: string;
+  artistName: string;
+  showStyle: boolean;
+  style: string;
+  displayDuration: number; // seconds to show before fading out
+}
+
+export interface SongInfoOverlayProps {
+  songTitle: string;
+  artistName: string;
+  showStyle: boolean;
+  style: string;
+  displayDuration: number;
 }

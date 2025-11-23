@@ -27,6 +27,14 @@ export interface RenderJobInput {
     githubQrImage?: string;
     bitcoinQrImage?: string;
   };
+  songInfoConfig?: {
+    enabled: boolean;
+    songTitle: string;
+    artistName: string;
+    showStyle: boolean;
+    style: string;
+    displayDuration: number;
+  };
 }
 
 class RenderQueue {

@@ -150,6 +150,7 @@ export const VideoPreview: React.FC = () => {
     lyricLines: project.lyricLines,
     useGrouping: project.useGrouping,
     outroConfig: project.outroConfig,
+    songInfoConfig: project.songInfoConfig,
   };
 
   // Show loading message while audio is being prefetched
@@ -291,6 +292,12 @@ export const VideoPreview: React.FC = () => {
 
         console.log("[Render] outroConfig for backend:", JSON.stringify(outroConfigForBackend));
         formData.append("outroConfig", JSON.stringify(outroConfigForBackend));
+      }
+
+      // Include song info configuration if enabled
+      if (project.songInfoConfig?.enabled) {
+        console.log("[Render] songInfoConfig for backend:", JSON.stringify(project.songInfoConfig));
+        formData.append("songInfoConfig", JSON.stringify(project.songInfoConfig));
       }
 
       // Start render job

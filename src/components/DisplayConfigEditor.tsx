@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { Monitor, Maximize2, Sparkles, Play, CheckCircle2, Film, Upload, X } from "lucide-react";
+import { Monitor, Maximize2, Sparkles, Play, CheckCircle2, Film, Upload, X, Music } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Input } from "./ui/input";
-import { useProject, DEFAULT_OUTRO_CONFIG } from "../lib/project-context";
+import { useProject, DEFAULT_OUTRO_CONFIG, DEFAULT_SONG_INFO_CONFIG } from "../lib/project-context";
 import { detectMediaOrientation, suggestDisplayMode, type MediaOrientation } from "../lib/media-utils";
 import { isValidBlobURL, createBlobURL, revokeBlobURL } from "../lib/blob-manager";
+import { formatTime } from "../lib/utils";
 
 // Track logged messages to prevent console spam
 const loggedMessages = new Set<string>();
@@ -49,7 +50,7 @@ const isValidMediaPath = (path: string | undefined): boolean => {
 };
 
 export const DisplayConfigEditor: React.FC = () => {
-  const { project, setProject, updateOutroConfig } = useProject();
+  const { project, setProject, updateOutroConfig, updateSongInfoConfig } = useProject();
   const [detectionStatus, setDetectionStatus] = useState<Map<string, MediaOrientation>>(new Map());
   const [isDetecting, setIsDetecting] = useState(false);
   const hasRunDetection = useRef(false);
@@ -380,6 +381,116 @@ export const DisplayConfigEditor: React.FC = () => {
           <Button onClick={resetToDefaults} variant="outline">
             Reset All to Defaults
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* Song Info Overlay Settings */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Music className="w-5 h-5" />
+            Song Info Overlay
+          </CardTitle>
+          <CardDescription>
+            Display song title, artist name, and style at the start of the video
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium">Enable Song Info</p>
+              <p className="text-sm text-muted-foreground">
+                Shows in top-left corner for first few seconds
+              </p>
+            </div>
+            <Button
+              variant={project.songInfoConfig?.enabled ? "default" : "outline"}
+              onClick={() => {
+                const currentConfig = project.songInfoConfig || DEFAULT_SONG_INFO_CONFIG;
+                updateSongInfoConfig({ enabled: !currentConfig.enabled });
+              }}
+            >
+              {project.songInfoConfig?.enabled ? "Enabled" : "Disabled"}
+            </Button>
+          </div>
+
+          {project.songInfoConfig?.enabled && (
+            <div className="pt-4 border-t space-y-4">
+              {/* Song Title */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Song Title</label>
+                <Input
+                  value={project.songInfoConfig?.songTitle || ""}
+                  onChange={(e) => updateSongInfoConfig({ songTitle: e.target.value })}
+                  placeholder="My Amazing Song"
+                />
+              </div>
+
+              {/* Artist Name */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Artist Name</label>
+                <Input
+                  value={project.songInfoConfig?.artistName || ""}
+                  onChange={(e) => updateSongInfoConfig({ artistName: e.target.value })}
+                  placeholder="ianux"
+                />
+              </div>
+
+              {/* Show Style Toggle */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Show Style</p>
+                  <p className="text-xs text-muted-foreground">
+                    Display the Suno song style below artist name
+                  </p>
+                </div>
+                <Button
+                  variant={project.songInfoConfig?.showStyle ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    const currentConfig = project.songInfoConfig || DEFAULT_SONG_INFO_CONFIG;
+                    updateSongInfoConfig({ showStyle: !currentConfig.showStyle });
+                  }}
+                >
+                  {project.songInfoConfig?.showStyle ? "Shown" : "Hidden"}
+                </Button>
+              </div>
+
+              {/* Style Text (only if showStyle is enabled) */}
+              {project.songInfoConfig?.showStyle && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Style</label>
+                  <Input
+                    value={project.songInfoConfig?.style || project.metadata?.sunoStyleText || ""}
+                    onChange={(e) => updateSongInfoConfig({ style: e.target.value })}
+                    placeholder="Melodic Pop, Upbeat, Electronic"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Auto-filled from Suno style file if available
+                  </p>
+                </div>
+              )}
+
+              {/* Display Duration */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Display Duration</label>
+                <Select
+                  value={String(project.songInfoConfig?.displayDuration || DEFAULT_SONG_INFO_CONFIG.displayDuration)}
+                  onValueChange={(value) => updateSongInfoConfig({ displayDuration: Number(value) })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="3">3 seconds</SelectItem>
+                    <SelectItem value="5">5 seconds</SelectItem>
+                    <SelectItem value="7">7 seconds</SelectItem>
+                    <SelectItem value="10">10 seconds</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -874,7 +985,7 @@ export const DisplayConfigEditor: React.FC = () => {
                     </SelectContent>
                   </Select>
                   <div className="text-xs text-muted-foreground">
-                    {group.duration.toFixed(1)}s duration
+                    {formatTime(group.start)} - {formatTime(group.end)} ({group.duration.toFixed(1)}s)
                   </div>
                 </div>
 
