@@ -23,6 +23,9 @@ export interface RenderJobInput {
     duration: number;
     appName: string;
     githubUrl: string;
+    aiCredits?: string;
+    githubQrImage?: string;
+    bitcoinQrImage?: string;
   };
 }
 

@@ -137,8 +137,43 @@ router.post("/render", upload.any(), async (req: Request, res: Response) => {
         });
       }
 
-      // Parse outro config if provided
-      const parsedOutroConfig = outroConfig ? JSON.parse(outroConfig) : undefined;
+      // Parse outro config if provided and map QR image file keys to URLs
+      let parsedOutroConfig = outroConfig ? JSON.parse(outroConfig) : undefined;
+      if (parsedOutroConfig) {
+        console.log('[Render] Received outroConfig:', JSON.stringify(parsedOutroConfig));
+        console.log('[Render] Available file keys:', Array.from(fileUrlMap.keys()));
+
+        // Map QR image file keys to server HTTP URLs
+        if (parsedOutroConfig.githubQrFileKey) {
+          const url = fileUrlMap.get(parsedOutroConfig.githubQrFileKey);
+          if (url) {
+            parsedOutroConfig.githubQrImage = url;
+            console.log(`[Render] GitHub QR image mapped: ${parsedOutroConfig.githubQrFileKey} -> ${url}`);
+          } else {
+            console.warn(`[Render] GitHub QR file key not found in uploads: ${parsedOutroConfig.githubQrFileKey}`);
+          }
+          delete parsedOutroConfig.githubQrFileKey;
+        }
+        if (parsedOutroConfig.bitcoinQrFileKey) {
+          const url = fileUrlMap.get(parsedOutroConfig.bitcoinQrFileKey);
+          if (url) {
+            parsedOutroConfig.bitcoinQrImage = url;
+            console.log(`[Render] Bitcoin QR image mapped: ${parsedOutroConfig.bitcoinQrFileKey} -> ${url}`);
+          } else {
+            console.warn(`[Render] Bitcoin QR file key not found in uploads: ${parsedOutroConfig.bitcoinQrFileKey}`);
+          }
+          delete parsedOutroConfig.bitcoinQrFileKey;
+        }
+        console.log('[Render] Final outro config:', {
+          enabled: parsedOutroConfig.enabled,
+          duration: parsedOutroConfig.duration,
+          appName: parsedOutroConfig.appName,
+          githubUrl: parsedOutroConfig.githubUrl,
+          aiCredits: parsedOutroConfig.aiCredits,
+          githubQrImage: parsedOutroConfig.githubQrImage || 'NOT SET',
+          bitcoinQrImage: parsedOutroConfig.bitcoinQrImage || 'NOT SET',
+        });
+      }
 
       inputProps = {
         scenes: [], // Empty for backward compatibility
@@ -151,7 +186,22 @@ router.post("/render", upload.any(), async (req: Request, res: Response) => {
     } else {
       // Legacy mode: process scenes
       const parsedScenes = JSON.parse(scenes || "[]");
-      const parsedOutroConfig = outroConfig ? JSON.parse(outroConfig) : undefined;
+      let parsedOutroConfig = outroConfig ? JSON.parse(outroConfig) : undefined;
+
+      // Map QR image file keys to URLs (same as grouping mode)
+      if (parsedOutroConfig) {
+        if (parsedOutroConfig.githubQrFileKey) {
+          const url = fileUrlMap.get(parsedOutroConfig.githubQrFileKey);
+          if (url) parsedOutroConfig.githubQrImage = url;
+          delete parsedOutroConfig.githubQrFileKey;
+        }
+        if (parsedOutroConfig.bitcoinQrFileKey) {
+          const url = fileUrlMap.get(parsedOutroConfig.bitcoinQrFileKey);
+          if (url) parsedOutroConfig.bitcoinQrImage = url;
+          delete parsedOutroConfig.bitcoinQrFileKey;
+        }
+      }
+
       inputProps = {
         scenes: parsedScenes,
         audioPath: `http://localhost:3002/uploads/${path.basename(audioFile.path)}`,

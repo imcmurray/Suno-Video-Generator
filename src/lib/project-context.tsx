@@ -9,6 +9,7 @@ export const DEFAULT_OUTRO_CONFIG: OutroConfig = {
   duration: 20,
   appName: "Suno Video Generator",
   githubUrl: "github.com/imcmurray/Suno-Video-Generator",
+  aiCredits: "Videos by Grok • Music by Suno AI • Lyrics by Claude, Grok & ChatGPT",
 };
 
 export interface ProjectState extends ProjectData {

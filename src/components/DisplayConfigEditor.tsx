@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { Monitor, Maximize2, Sparkles, Play, CheckCircle2, Film } from "lucide-react";
+import { Monitor, Maximize2, Sparkles, Play, CheckCircle2, Film, Upload, X } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Input } from "./ui/input";
 import { useProject, DEFAULT_OUTRO_CONFIG } from "../lib/project-context";
 import { detectMediaOrientation, suggestDisplayMode, type MediaOrientation } from "../lib/media-utils";
-import { isValidBlobURL } from "../lib/blob-manager";
+import { isValidBlobURL, createBlobURL, revokeBlobURL } from "../lib/blob-manager";
 
 // Track logged messages to prevent console spam
 const loggedMessages = new Set<string>();
@@ -413,14 +414,147 @@ export const DisplayConfigEditor: React.FC = () => {
           </div>
 
           {project.outroConfig?.enabled && (
-            <div className="pt-4 border-t space-y-3">
-              <div className="text-sm">
-                <p className="font-medium mb-2">Outro will include:</p>
-                <ul className="list-disc list-inside text-muted-foreground space-y-1">
+            <div className="pt-4 border-t space-y-4">
+              {/* App Name */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">App Name</label>
+                <Input
+                  value={project.outroConfig?.appName || DEFAULT_OUTRO_CONFIG.appName}
+                  onChange={(e) => updateOutroConfig({ appName: e.target.value })}
+                  placeholder="Suno Video Generator"
+                />
+              </div>
+
+              {/* GitHub URL */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">GitHub URL</label>
+                <Input
+                  value={project.outroConfig?.githubUrl || DEFAULT_OUTRO_CONFIG.githubUrl}
+                  onChange={(e) => updateOutroConfig({ githubUrl: e.target.value })}
+                  placeholder="github.com/username/repo"
+                />
+              </div>
+
+              {/* AI Credits */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">AI Credits Text</label>
+                <Input
+                  value={project.outroConfig?.aiCredits || DEFAULT_OUTRO_CONFIG.aiCredits}
+                  onChange={(e) => updateOutroConfig({ aiCredits: e.target.value })}
+                  placeholder="Videos by Grok • Music by Suno AI • Lyrics by Claude"
+                />
+                <p className="text-xs text-muted-foreground">Use • to separate credits</p>
+              </div>
+
+              {/* QR Codes Section */}
+              <div className="pt-4 border-t">
+                <p className="font-medium mb-3">QR Codes (appear in last 5 seconds)</p>
+                <div className="grid grid-cols-2 gap-4">
+                  {/* GitHub QR Code */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">GitHub QR Code</label>
+                    <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                      {project.outroConfig?.githubQrImage ? (
+                        <div className="relative">
+                          <img
+                            src={project.outroConfig.githubQrImage}
+                            alt="GitHub QR"
+                            className="w-24 h-24 mx-auto object-contain"
+                          />
+                          <Button
+                            variant="destructive"
+                            size="icon"
+                            className="absolute top-0 right-0 w-6 h-6"
+                            onClick={() => {
+                              if (project.outroConfig?.githubQrImage) {
+                                revokeBlobURL(project.outroConfig.githubQrImage);
+                              }
+                              updateOutroConfig({ githubQrImage: undefined });
+                            }}
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <label className="cursor-pointer">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const url = createBlobURL(file, { versionLabel: 'qr-github' });
+                                updateOutroConfig({ githubQrImage: url });
+                              }
+                            }}
+                          />
+                          <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                          <p className="text-sm text-muted-foreground">Upload QR</p>
+                        </label>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Bitcoin QR Code */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Bitcoin QR Code</label>
+                    <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                      {project.outroConfig?.bitcoinQrImage ? (
+                        <div className="relative">
+                          <img
+                            src={project.outroConfig.bitcoinQrImage}
+                            alt="Bitcoin QR"
+                            className="w-24 h-24 mx-auto object-contain"
+                          />
+                          <Button
+                            variant="destructive"
+                            size="icon"
+                            className="absolute top-0 right-0 w-6 h-6"
+                            onClick={() => {
+                              if (project.outroConfig?.bitcoinQrImage) {
+                                revokeBlobURL(project.outroConfig.bitcoinQrImage);
+                              }
+                              updateOutroConfig({ bitcoinQrImage: undefined });
+                            }}
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <label className="cursor-pointer">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const url = createBlobURL(file, { versionLabel: 'qr-bitcoin' });
+                                updateOutroConfig({ bitcoinQrImage: url });
+                              }
+                            }}
+                          />
+                          <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                          <p className="text-sm text-muted-foreground">Upload QR</p>
+                        </label>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Preview Summary */}
+              <div className="pt-4 border-t text-sm text-muted-foreground">
+                <p className="font-medium text-foreground mb-2">Outro Preview:</p>
+                <ul className="list-disc list-inside space-y-1">
                   <li>Ripple animation of all video thumbnails</li>
-                  <li>AI credits (Grok, Suno AI, Claude/Grok/ChatGPT)</li>
+                  <li>AI credits: {project.outroConfig?.aiCredits || DEFAULT_OUTRO_CONFIG.aiCredits}</li>
                   <li>App name: {project.outroConfig?.appName || DEFAULT_OUTRO_CONFIG.appName}</li>
                   <li>GitHub: {project.outroConfig?.githubUrl || DEFAULT_OUTRO_CONFIG.githubUrl}</li>
+                  {(project.outroConfig?.githubQrImage || project.outroConfig?.bitcoinQrImage) && (
+                    <li>QR codes appear in last 5 seconds</li>
+                  )}
                 </ul>
               </div>
             </div>

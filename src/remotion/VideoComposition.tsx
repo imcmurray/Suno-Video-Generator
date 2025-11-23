@@ -180,6 +180,9 @@ export const VideoComposition = ({
               duration={outroConfig.duration}
               appName={outroConfig.appName}
               githubUrl={outroConfig.githubUrl}
+              aiCredits={outroConfig.aiCredits}
+              githubQrImage={outroConfig.githubQrImage}
+              bitcoinQrImage={outroConfig.bitcoinQrImage}
             />
           </Sequence>
         );

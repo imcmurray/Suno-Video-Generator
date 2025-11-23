@@ -106,6 +106,9 @@ export const Outro: React.FC<OutroProps> = ({
   duration,
   appName,
   githubUrl,
+  aiCredits,
+  githubQrImage,
+  bitcoinQrImage,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -117,6 +120,8 @@ export const Outro: React.FC<OutroProps> = ({
   const rippleEndTime = 5;
   const brandingFadeInStart = 5;
   const brandingFadeInEnd = 6;
+  const qrFadeInStart = duration - 5; // QR codes appear in last 5 seconds
+  const qrFadeInEnd = duration - 4;
   const fadeOutStart = duration - 1;
 
   // Convert to frames
@@ -125,6 +130,8 @@ export const Outro: React.FC<OutroProps> = ({
   const rippleEndFrame = rippleEndTime * fps;
   const brandingFadeInStartFrame = brandingFadeInStart * fps;
   const brandingFadeInEndFrame = brandingFadeInEnd * fps;
+  const qrFadeInStartFrame = qrFadeInStart * fps;
+  const qrFadeInEndFrame = qrFadeInEnd * fps;
   const fadeOutStartFrame = fadeOutStart * fps;
 
   // Overall fade in (0-1s)
@@ -169,6 +176,14 @@ export const Outro: React.FC<OutroProps> = ({
   const brandingOpacity = interpolate(
     frame,
     [brandingFadeInStartFrame, brandingFadeInEndFrame],
+    [0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+  );
+
+  // QR codes opacity (last 5 seconds)
+  const qrOpacity = interpolate(
+    frame,
+    [qrFadeInStartFrame, qrFadeInEndFrame],
     [0, 1],
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
   );
@@ -234,7 +249,7 @@ export const Outro: React.FC<OutroProps> = ({
           opacity: brandingOpacity,
         }}
       >
-        {/* AI Credits */}
+        {/* AI Credits - customizable */}
         <div
           style={{
             fontSize: 20,
@@ -243,11 +258,7 @@ export const Outro: React.FC<OutroProps> = ({
             lineHeight: 1.6,
           }}
         >
-          <span>Videos by <strong>Grok</strong></span>
-          <span style={{ margin: "0 12px", opacity: 0.5 }}>•</span>
-          <span>Music by <strong>Suno AI</strong></span>
-          <span style={{ margin: "0 12px", opacity: 0.5 }}>•</span>
-          <span>Lyrics by <strong>Claude, Grok & ChatGPT</strong></span>
+          {aiCredits}
         </div>
 
         {/* App Name */}
@@ -274,6 +285,68 @@ export const Outro: React.FC<OutroProps> = ({
           {githubUrl}
         </div>
       </div>
+
+      {/* QR Codes Section - appears in last 5 seconds */}
+      {(githubQrImage || bitcoinQrImage) && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: 60,
+            left: 0,
+            right: 0,
+            display: "flex",
+            justifyContent: "space-between",
+            padding: "0 120px",
+            opacity: qrOpacity,
+          }}
+        >
+          {/* GitHub QR Code - Left */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              opacity: githubQrImage ? 1 : 0,
+            }}
+          >
+            {githubQrImage && (
+              <Img
+                src={githubQrImage}
+                style={{
+                  width: 180,
+                  height: 180,
+                  borderRadius: 8,
+                  backgroundColor: "white",
+                  padding: 8,
+                }}
+              />
+            )}
+          </div>
+
+          {/* Bitcoin QR Code - Right */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              opacity: bitcoinQrImage ? 1 : 0,
+            }}
+          >
+            {bitcoinQrImage && (
+              <Img
+                src={bitcoinQrImage}
+                style={{
+                  width: 180,
+                  height: 180,
+                  borderRadius: 8,
+                  backgroundColor: "white",
+                  padding: 8,
+                }}
+              />
+            )}
+          </div>
+        </div>
+      )}
     </AbsoluteFill>
   );
 };

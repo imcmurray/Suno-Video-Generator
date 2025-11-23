@@ -113,6 +113,9 @@ export interface OutroConfig {
   duration: number; // Duration in seconds (default 20)
   appName: string;
   githubUrl: string;
+  aiCredits: string; // Customizable AI credits text
+  githubQrImage?: string; // Blob URL for GitHub QR code image
+  bitcoinQrImage?: string; // Blob URL for Bitcoin QR code image
 }
 
 export interface OutroMediaItem {
@@ -125,4 +128,7 @@ export interface OutroProps {
   duration: number; // Duration in seconds
   appName: string;
   githubUrl: string;
+  aiCredits: string; // Customizable AI credits text
+  githubQrImage?: string; // Blob URL for GitHub QR code image
+  bitcoinQrImage?: string; // Blob URL for Bitcoin QR code image
 }

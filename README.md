@@ -12,6 +12,9 @@ Transform your Suno AI-generated songs into professional HD music videos with AI
 - **🎬 Ken Burns Effects** - Smooth zoom/pan animations on static images
 - **⏱️ Timeline Scrubbing** - Frame-accurate preview with timeline controls
 - **💰 Cost Estimation** - Know the cost before generating images
+- **🎬 Outro/Credits Sequence** - Auto-generated credits with video showcase and AI attribution
+- **🔄 Video Looping** - Scene group videos loop seamlessly in final renders
+- **🧠 AI Enhanced Prompts** - Precision visual translator for symbolic, lyric-based imagery
 
 ## 🚀 Quick Start
 
@@ -156,6 +159,38 @@ Handles special Suno subtitle conventions:
 - `(background vocals)` - Kept in captions, excluded from image prompts
 - `[Intro]`, `[Instrumental]` - Triggers abstract visuals
 
+### Outro/Credits Sequence
+
+Automatically generates a professional credits sequence at the end of your video:
+
+- **Video Showcase** - Displays all videos used in the project in a dynamic grid
+- **Ripple Animation** - Videos appear with staggered timing (top-left to bottom-right)
+- **Looping Playback** - All videos loop continuously during the credits
+- **Customizable Text** - Edit App Name, GitHub URL, and AI Credits text
+- **QR Code Support** - Upload GitHub and Bitcoin QR codes (appear in last 5 seconds)
+- **Duration** - 20 seconds with smooth fade in/out transitions
+- **Toggleable** - Enable/disable in Display Configuration settings
+- **Dynamic Grid** - Automatically sizes grid to accommodate any number of videos
+- **Export/Import** - QR images and all outro settings preserved in project exports
+
+### Video Looping in Scene Groups
+
+Videos assigned to scene groups now loop correctly in final renders:
+
+- **Automatic Duration Detection** - Reads actual video duration from metadata
+- **Seamless Looping** - Uses Remotion's Loop component with real video duration
+- **Extended Scenes** - Videos loop seamlessly when scene duration exceeds video length
+
+### AI Enhanced Prompts
+
+The AI prompt enhancement system uses a precision visual translator framework:
+
+- **Symbolic Imagery** - Generates prompts based on actual lyric content and meaning
+- **Avoids Generic Terms** - Filters out overused terms like "vibrant, neon, gritty, raw, rebellious"
+- **Surreal/Abstract Focus** - Creates unique, evocative imagery tied to specific lyrics
+- **Progressive UI** - AI Enhanced tags appear in real-time as batches complete
+- **Per-Scene Regeneration** - Regenerate individual AI Enhanced prompts with a single click
+
 ## 📊 Cost Estimation
 
 **OpenAI DALL-E 3:**
@@ -264,9 +299,9 @@ Between scenes, you can add crossfade effects using Remotion's transition utilit
 
 ## 🔮 Future Enhancements
 
-- [ ] Video clips instead of static images
+- [x] Video clips instead of static images ✅ (Grok video generation + import support)
+- [x] Lyric overlay on video ✅ (Karaoke-style lyrics during playback)
 - [ ] Crossfade transitions between scenes
-- [ ] Lyric overlay on video
 - [ ] Multiple visual styles per song
 - [ ] Batch processing queue
 - [ ] Cloud rendering with Remotion Lambda

@@ -7,7 +7,7 @@ import { Label } from "./ui/label";
 import { useProject } from "../lib/project-context";
 import { SceneData, SceneGroup, LyricLine } from "../types";
 import { ImageVariationPicker } from "./ImageVariationPicker";
-import { enhanceAllPromptsWithTheme } from "../lib/image-api";
+import { enhanceAllPromptsWithTheme, enhancePromptWithAI, APIProvider } from "../lib/image-api";
 
 interface SceneEditorProps {
   scene: SceneData;
@@ -150,6 +150,13 @@ interface SceneGroupEditorProps {
   sequence: number;
   isExpanded: boolean;
   onToggle: () => void;
+  apiProvider?: APIProvider;
+  apiKey?: string;
+  themeContext?: {
+    sunoStyle?: string;
+    genre?: string;
+    mood?: string;
+  };
 }
 
 const SceneGroupEditor: React.FC<SceneGroupEditorProps> = ({
@@ -159,12 +166,44 @@ const SceneGroupEditor: React.FC<SceneGroupEditorProps> = ({
   sequence,
   isExpanded,
   onToggle,
+  apiProvider,
+  apiKey,
+  themeContext,
 }) => {
   const [isEditingCustom, setIsEditingCustom] = useState(false);
   const [customPromptText, setCustomPromptText] = useState(group.customPrompt || group.prompt);
   const [selectedType, setSelectedType] = useState<"basic" | "enhanced" | "custom">(
     group.selectedPromptType || "enhanced"
   );
+  const [isRegenerating, setIsRegenerating] = useState(false);
+
+  const handleRegenerateEnhanced = async () => {
+    if (!apiProvider || !apiKey) {
+      console.warn("Cannot regenerate: API not configured");
+      return;
+    }
+
+    setIsRegenerating(true);
+    try {
+      const enhanced = await enhancePromptWithAI(
+        group.prompt,
+        apiProvider,
+        apiKey,
+        themeContext
+      );
+
+      // Update the group with new enhanced prompt
+      onUpdate({
+        enhancedPrompt: enhanced,
+        selectedPromptType: "enhanced",
+      });
+      setSelectedType("enhanced");
+    } catch (error) {
+      console.error("Failed to regenerate enhanced prompt:", error);
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
 
   const handlePromptTypeChange = (type: "basic" | "enhanced" | "custom") => {
     setSelectedType(type);
@@ -300,12 +339,26 @@ const SceneGroupEditor: React.FC<SceneGroupEditorProps> = ({
                       className="mt-1"
                     />
                     <div className="flex-1">
-                      <label htmlFor={`enhanced-${group.id}`} className="font-medium text-sm cursor-pointer flex items-center gap-2">
-                        AI Enhanced
-                        <span className="text-xs bg-green-500/20 text-green-700 px-2 py-0.5 rounded">
-                          Recommended
-                        </span>
-                      </label>
+                      <div className="flex items-center justify-between">
+                        <label htmlFor={`enhanced-${group.id}`} className="font-medium text-sm cursor-pointer flex items-center gap-2">
+                          AI Enhanced
+                          <span className="text-xs bg-green-500/20 text-green-700 px-2 py-0.5 rounded">
+                            Recommended
+                          </span>
+                        </label>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRegenerateEnhanced();
+                          }}
+                          disabled={isRegenerating || !apiProvider || !apiKey}
+                          title={!apiProvider || !apiKey ? "Configure API in Step 3 to regenerate" : "Regenerate AI Enhanced prompt"}
+                        >
+                          <RefreshCw className={`w-4 h-4 ${isRegenerating ? 'animate-spin' : ''}`} />
+                        </Button>
+                      </div>
                       <p className="text-xs text-muted-foreground mt-1">{group.enhancedPrompt}</p>
                     </div>
                   </div>
@@ -744,6 +797,13 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
               sequence={index + 1}
               isExpanded={expandedScenes.has(index + 1)}
               onToggle={() => toggleScene(index + 1)}
+              apiProvider={project.apiProvider}
+              apiKey={project.apiKey}
+              themeContext={{
+                sunoStyle: project.metadata.sunoStyleText || "",
+                genre: project.metadata.extractedStyleElements.genres.join(', '),
+                mood: project.metadata.extractedStyleElements.mood,
+              }}
             />
           ))
         ) : (

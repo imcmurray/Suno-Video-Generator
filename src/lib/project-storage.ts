@@ -1,9 +1,9 @@
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import { ProjectState } from "./project-context";
-import { SceneGroup } from "../types";
+import { SceneGroup, OutroConfig } from "../types";
 import { createBlobURL, revokeGroupBlobURLs } from "./blob-manager";
-import { detectVideoFPS } from "./media-utils";
+import { detectVideoFPS, detectVideoDuration } from "./media-utils";
 
 /**
  * Save project state to JSON file
@@ -36,6 +36,12 @@ export async function saveProject(project: ProjectState): Promise<void> {
     })),
     apiProvider: project.apiProvider,
     imageGenerationProgress: project.imageGenerationProgress,
+    // Save outro config (without blob URLs)
+    outroConfig: project.outroConfig ? {
+      ...project.outroConfig,
+      githubQrImage: undefined, // Blob URLs won't work after reload
+      bitcoinQrImage: undefined,
+    } : undefined,
   };
 
   const json = JSON.stringify(projectData, null, 2);
@@ -240,6 +246,12 @@ export async function exportCompleteProject(project: ProjectState): Promise<void
     })),
     apiProvider: project.apiProvider,
     imageGenerationProgress: project.imageGenerationProgress,
+    // Save outro config (QR image paths will be set from manifest)
+    outroConfig: project.outroConfig ? {
+      ...project.outroConfig,
+      githubQrImage: undefined, // Will be restored from manifest
+      bitcoinQrImage: undefined,
+    } : undefined,
   };
 
   zip.file("project.json", JSON.stringify(projectData, null, 2));
@@ -294,10 +306,33 @@ export async function exportCompleteProject(project: ProjectState): Promise<void
     await Promise.all(mediaPromises);
   }
 
-  // 4. Add manifest
+  // 4. Add QR code images if present
+  if (project.outroConfig?.githubQrImage) {
+    try {
+      const response = await fetch(project.outroConfig.githubQrImage);
+      const blob = await response.blob();
+      zip.file("qr_github.png", blob);
+      manifest.githubQrFilename = "qr_github.png";
+    } catch (error) {
+      console.error("Failed to add GitHub QR image:", error);
+    }
+  }
+
+  if (project.outroConfig?.bitcoinQrImage) {
+    try {
+      const response = await fetch(project.outroConfig.bitcoinQrImage);
+      const blob = await response.blob();
+      zip.file("qr_bitcoin.png", blob);
+      manifest.bitcoinQrFilename = "qr_bitcoin.png";
+    } catch (error) {
+      console.error("Failed to add Bitcoin QR image:", error);
+    }
+  }
+
+  // 5. Add manifest
   zip.file("manifest.json", JSON.stringify(manifest, null, 2));
 
-  // 5. Generate and download ZIP
+  // 6. Generate and download ZIP
   const zipBlob = await zip.generateAsync({ type: "blob" });
   const filename = `${project.metadata.srtFile?.replace(".srt", "") || "project"}_complete.zip`;
 
@@ -341,7 +376,29 @@ export async function importCompleteProject(
   const audioBlob = await audioFile.async("blob");
   const audioFileObj = new File([audioBlob], audioFilename, { type: "audio/wav" });
 
-  // 4. Load all media files and create blob URLs
+  // 4. Load QR code images if present in manifest
+  let githubQrImage: string | undefined;
+  let bitcoinQrImage: string | undefined;
+
+  if (manifest.githubQrFilename) {
+    const qrFile = zip.file(manifest.githubQrFilename);
+    if (qrFile) {
+      const blob = await qrFile.async("blob");
+      githubQrImage = createBlobURL(blob, { versionLabel: "qr_github" });
+      console.log("[importCompleteProject] Restored GitHub QR image");
+    }
+  }
+
+  if (manifest.bitcoinQrFilename) {
+    const qrFile = zip.file(manifest.bitcoinQrFilename);
+    if (qrFile) {
+      const blob = await qrFile.async("blob");
+      bitcoinQrImage = createBlobURL(blob, { versionLabel: "qr_bitcoin" });
+      console.log("[importCompleteProject] Restored Bitcoin QR image");
+    }
+  }
+
+  // 5. Load all media files and create blob URLs
   const sceneGroups = projectData.sceneGroups?.map((group: any) => {
     const groupManifest = manifest.groups[group.id];
     if (!groupManifest) return group;
@@ -382,14 +439,18 @@ export async function importCompleteProject(
             version.path = createBlobURL(blob, { groupId: group.id, versionLabel: version.label });
             delete version.zipFile; // Clean up
 
-            // Detect FPS for videos if not already present
-            if (version.type === 'video' && !version.fps) {
+            // Detect FPS and duration for videos if not already present
+            if (version.type === 'video') {
               try {
-                const detectedFPS = await detectVideoFPS(version.path);
+                const [detectedFPS, detectedDuration] = await Promise.all([
+                  !version.fps ? detectVideoFPS(version.path) : Promise.resolve(version.fps),
+                  !version.duration ? detectVideoDuration(version.path) : Promise.resolve(version.duration),
+                ]);
                 version.fps = detectedFPS ?? undefined;
-                console.log(`[importCompleteProject] Detected FPS for ${version.label}: ${version.fps || 'unknown, will use composition default'}`);
+                version.duration = detectedDuration ?? undefined;
+                console.log(`[importCompleteProject] Detected video metadata for ${version.label}: FPS=${version.fps || 'default'}, Duration=${version.duration || 'unknown'}s`);
               } catch (error) {
-                console.warn(`[importCompleteProject] Failed to detect FPS for ${version.label}:`, error);
+                console.warn(`[importCompleteProject] Failed to detect video metadata for ${version.label}:`, error);
               }
             }
 
@@ -403,10 +464,18 @@ export async function importCompleteProject(
     }
   }
 
+  // 6. Restore outroConfig with QR images
+  const restoredOutroConfig = projectData.outroConfig ? {
+    ...projectData.outroConfig,
+    githubQrImage,
+    bitcoinQrImage,
+  } : undefined;
+
   return {
     project: {
       ...projectData,
       sceneGroups,
+      outroConfig: restoredOutroConfig,
     },
     audioFile: audioFileObj,
   };

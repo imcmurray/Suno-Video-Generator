@@ -23,12 +23,15 @@ From these, the system:
 
 - **Style Consistency**: Visual atmosphere automatically derived from Suno prompt
 - **Perfect Sync**: SRT timing ensures frame-perfect synchronization
-- **Suno Format Handling**: 
+- **Suno Format Handling**:
   - Background vocals in (parentheses) are shown in captions but excluded from image prompts
   - Structural markers like [Intro], [Instrumental] trigger abstract visuals
 - **Cost Effective**: ~$2-5 per song with OpenAI DALL-E 3
 - **Resume Capable**: Image generation can be interrupted and resumed
 - **YouTube Optimized**: 1920x1080, H.264, AAC 320kbps
+- **Outro/Credits Sequence**: Auto-generated credits with video showcase and AI attribution
+- **Video Looping**: Scene group videos loop seamlessly in final renders using actual duration
+- **AI Enhanced Prompts**: Precision visual translator for symbolic, lyric-based imagery
 
 ## Architecture
 
@@ -340,12 +343,12 @@ Edit `assemble_video.py` to:
 - Verify video/audio sync manually
 
 ### Extension Ideas
-- Support for video clips instead of static images
+- ✅ Support for video clips instead of static images (Grok video generation + import)
+- ✅ Lyric overlay on video (Karaoke-style lyrics during playback)
+- ✅ Web UI for configuration (React + Shadcn/ui)
 - Transition effects between scenes
-- Lyric overlay on video
 - Multiple visual styles per song
 - Batch processing queue system
-- Web UI for configuration
 
 ## Git Repository Structure
 
@@ -405,3 +408,45 @@ export OPENAI_API_KEY="sk-xxxxx"
 - Test with short example SRT first (3-5 scenes)
 - Validate JSON output structure before image generation
 - Always verify video sync after assembly changes
+
+---
+
+## Remotion Web App Features
+
+### Outro/Credits Sequence
+
+**Location**: `src/remotion/Outro.tsx`, `src/remotion/VideoComposition.tsx`
+
+Automatically generates a professional credits sequence at the end of the video:
+
+- **Video Grid**: Dynamic grid layout that scales to accommodate any number of videos
+- **Ripple Animation**: Videos appear with staggered timing from top-left to bottom-right
+- **Grid Calculation**: `getGridDimensions()` calculates optimal cols/rows based on video count
+- **Looping**: Uses Remotion's `<Loop>` component for continuous playback
+- **AI Attribution**: Displays "Videos by Grok • Music by Suno AI • Lyrics by Claude, Grok & ChatGPT"
+- **Branding**: Shows app name and GitHub URL with fade transitions
+- **Configuration**: `OutroConfig` type in `src/types/index.ts`, toggleable in Display Configuration
+
+### Video Looping in Scene Groups
+
+**Location**: `src/remotion/SceneGroup.tsx`, `src/lib/media-utils.ts`
+
+Videos now loop correctly in final renders using actual video duration:
+
+- **Duration Detection**: `detectVideoDuration()` in `media-utils.ts` reads duration from video metadata
+- **MediaVersion Type**: `duration?: number` field stores detected duration
+- **Loop Calculation**: `videoLoopDuration = Math.ceil(videoDurationSeconds * fps)`
+- **Conditional Looping**: Only loops when `sceneGroup.duration > videoDurationSeconds`
+- **Detection Timing**: Duration detected when videos are added via `addMediaVersion()` or `handleImportVideo()`
+
+### AI Enhanced Prompts
+
+**Location**: `src/lib/image-api.ts` (`enhancePromptWithAI` function)
+
+Precision visual translator framework for better image prompts:
+
+- **Framework**: Four-question analysis (literal meaning, emotion, objects/metaphors, symbolic image)
+- **Banned Terms**: vibrant, cinematic, gritty, raw, rebellious, neon, alley, graffiti, fire escape, haze, smoke, pulsing, crackling, high-contrast drama, urban skyline, motorcycle, lightning
+- **Rules**: Prefer symbolic/surreal over realistic; color palette serves emotion only
+- **Progressive UI**: Updates after each batch using accumulated `allGroupUpdates` object
+- **Theme Context**: Suno style, genre, and mood appended for consistency across scenes

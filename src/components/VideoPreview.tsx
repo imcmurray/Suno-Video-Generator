@@ -250,7 +250,47 @@ export const VideoPreview: React.FC = () => {
 
       // Include outro configuration if enabled
       if (project.outroConfig) {
-        formData.append("outroConfig", JSON.stringify(project.outroConfig));
+        // Build outroConfig for backend WITHOUT blob URLs
+        const outroConfigForBackend: any = {
+          enabled: project.outroConfig.enabled,
+          duration: project.outroConfig.duration,
+          appName: project.outroConfig.appName,
+          githubUrl: project.outroConfig.githubUrl,
+          aiCredits: project.outroConfig.aiCredits,
+          // DO NOT include githubQrImage or bitcoinQrImage blob URLs
+        };
+
+        // Upload QR images if present (convert blob URLs to files)
+        if (project.outroConfig.githubQrImage) {
+          try {
+            console.log("[Render] Uploading GitHub QR from blob:", project.outroConfig.githubQrImage.substring(0, 50));
+            const response = await fetch(project.outroConfig.githubQrImage);
+            const blob = await response.blob();
+            const file = new File([blob], "qr_github.png", { type: "image/png" });
+            formData.append("qr_github", file);
+            outroConfigForBackend.githubQrFileKey = "qr_github";
+            console.log("[Render] Added GitHub QR image to upload");
+          } catch (error) {
+            console.error("[Render] Failed to upload GitHub QR image:", error);
+          }
+        }
+
+        if (project.outroConfig.bitcoinQrImage) {
+          try {
+            console.log("[Render] Uploading Bitcoin QR from blob:", project.outroConfig.bitcoinQrImage.substring(0, 50));
+            const response = await fetch(project.outroConfig.bitcoinQrImage);
+            const blob = await response.blob();
+            const file = new File([blob], "qr_bitcoin.png", { type: "image/png" });
+            formData.append("qr_bitcoin", file);
+            outroConfigForBackend.bitcoinQrFileKey = "qr_bitcoin";
+            console.log("[Render] Added Bitcoin QR image to upload");
+          } catch (error) {
+            console.error("[Render] Failed to upload Bitcoin QR image:", error);
+          }
+        }
+
+        console.log("[Render] outroConfig for backend:", JSON.stringify(outroConfigForBackend));
+        formData.append("outroConfig", JSON.stringify(outroConfigForBackend));
       }
 
       // Start render job

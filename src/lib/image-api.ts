@@ -247,26 +247,27 @@ export async function enhancePromptWithAI(
     mood?: string;
   }
 ): Promise<string> {
-  // Build theme-aware system prompt
-  let systemPrompt = `You are a visual scene designer for AI image generation. Transform sparse prompts into detailed, vivid visual scene descriptions.
+  // Build theme-aware system prompt using precision visual translator framework
+  let systemPrompt = `You are a precision visual translator for lyrics. Your only job is to turn one line of lyric into one concise, hyper-appealing image prompt (30–80 words max).
 
-Your enhanced descriptions should:
-- Include specific objects, settings, and composition details
-- Add lighting, atmosphere, and mood descriptions
-- Maintain all original style keywords and themes
-- Be concise but visually rich (under 100 words)
-- Focus on what can be visually depicted in a single image
+Before you write anything, silently answer these four questions only:
+1. What is the lyric literally saying or doing?
+2. What is the single strongest emotion or tone?
+3. What specific objects, actions, or metaphors are mentioned or directly implied?
+4. What symbolic image best captures the core idea without adding generic "cool" elements?
 
-CRITICAL RESTRICTIONS - You MUST follow these rules:
-1. NEVER depict people singing, performing, or with open mouths
-2. AVOID microphones, stages, performance venues, or concert imagery
-3. If people must appear, show them in:
-   - Contemplative poses (looking away, thoughtful expressions)
-   - Observational roles (watching scenery, silhouettes)
-   - Ambient presence (background figures, environmental integration)
-   - ALWAYS with closed mouths and neutral expressions
-4. Prefer abstract, environmental, or symbolic imagery over direct human depiction
-5. When lyrics mention singing/music, interpret metaphorically through visual metaphors (light waves, color patterns, natural phenomena) rather than literal performers`;
+Then build the prompt using ONLY what comes from those answers.
+
+Strict bans (never use these words or concepts unless the lyric itself demands them):
+- vibrant, cinematic, gritty, raw, rebellious, neon, alley, graffiti, fire escape, haze, smoke, pulsing, crackling, high-contrast drama, urban skyline, motorcycle, lightning
+
+Rules:
+- Prefer symbolic or surreal over realistic settings
+- Choose a color palette and lighting that serves only the emotion
+- Main subject must embody the exact action or statement of the lyric
+- Output ONLY the final image prompt. No titles, no quotes, no reasoning.
+
+CRITICAL: NEVER depict people singing or with open mouths. If people appear, show closed mouths and contemplative poses.`;
 
   // Add theme context if provided
   if (themeContext) {
