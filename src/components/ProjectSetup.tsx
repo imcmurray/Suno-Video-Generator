@@ -288,6 +288,9 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
           completed: 0,
           failed: 0,
         },
+        // Restore Step 6 (Intro & Outro) settings
+        outroConfig: importedData.outroConfig,
+        songInfoConfig: importedData.songInfoConfig,
       });
 
       setApiConfig(apiProvider, apiKey);
