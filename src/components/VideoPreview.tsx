@@ -129,10 +129,15 @@ export const VideoPreview: React.FC = () => {
   // Check if using grouping mode
   const usingGrouping = project.useGrouping && project.sceneGroups && project.lyricLines;
 
-  // Calculate total duration in frames
+  // Sort scene groups by start time to ensure correct ordering for duration calculation
+  const sortedSceneGroups = project.sceneGroups
+    ? [...project.sceneGroups].sort((a, b) => a.start - b.start)
+    : undefined;
+
+  // Calculate total duration in frames (use sorted groups to get chronologically last group)
   let totalDurationSeconds = usingGrouping
-    ? (project.sceneGroups && project.sceneGroups.length > 0
-        ? project.sceneGroups[project.sceneGroups.length - 1].end
+    ? (sortedSceneGroups && sortedSceneGroups.length > 0
+        ? sortedSceneGroups[sortedSceneGroups.length - 1].end
         : 60)
     : (project.scenes[project.scenes.length - 1]?.end || 60);
 
@@ -489,8 +494,8 @@ export const VideoPreview: React.FC = () => {
                   {usingGrouping ? "Group Timeline" : "Scene Timeline"}
                 </p>
                 <div className="flex gap-1 h-8 bg-muted rounded overflow-hidden">
-                  {usingGrouping && project.sceneGroups ? (
-                    project.sceneGroups.map((group, index) => {
+                  {usingGrouping && sortedSceneGroups ? (
+                    sortedSceneGroups.map((group, index) => {
                       const widthPercent =
                         (group.duration / totalDurationSeconds) * 100;
                       return (
@@ -554,8 +559,8 @@ export const VideoPreview: React.FC = () => {
                   {usingGrouping ? "Total Groups" : "Total Scenes"}
                 </p>
                 <p className="text-lg font-semibold">
-                  {usingGrouping && project.sceneGroups
-                    ? project.sceneGroups.length
+                  {usingGrouping && sortedSceneGroups
+                    ? sortedSceneGroups.length
                     : project.scenes.length}
                 </p>
               </div>
@@ -746,8 +751,8 @@ export const VideoPreview: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-2 max-h-80 overflow-y-auto">
-                {usingGrouping && project.sceneGroups ? (
-                  project.sceneGroups.map((group, index) => {
+                {usingGrouping && sortedSceneGroups ? (
+                  sortedSceneGroups.map((group, index) => {
                     const groupLines = project.lyricLines?.filter((line) =>
                       group.lyricLineIds.includes(line.id)
                     );

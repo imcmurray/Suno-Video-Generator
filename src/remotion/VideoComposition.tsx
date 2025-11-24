@@ -17,10 +17,16 @@ export const VideoComposition = ({
 }: VideoCompositionProps) => {
   const { fps } = useVideoConfig();
 
+  // Sort scene groups by start time to ensure correct ordering
+  // This is critical for determining the chronologically last group for outro timing
+  const sortedSceneGroups = sceneGroups
+    ? [...sceneGroups].sort((a, b) => a.start - b.start)
+    : undefined;
+
   // Log when VideoComposition mounts/renders
   console.log('[VideoComposition] 🎥 Component rendering:', {
     useGrouping,
-    sceneGroupsCount: sceneGroups?.length,
+    sceneGroupsCount: sortedSceneGroups?.length,
     scenesCount: scenes?.length,
     hasAudio: !!audioPath,
     outroEnabled: outroConfig?.enabled,
@@ -48,11 +54,11 @@ export const VideoComposition = ({
       {!audioPath && console.error("✗ No audioPath provided to VideoComposition")}
 
       {/* Render scenes or scene groups based on mode */}
-      {useGrouping && sceneGroups && lyricLines ? (
+      {useGrouping && sortedSceneGroups && lyricLines ? (
         // Render scene groups with time-synchronized lyrics
-        sceneGroups.map((group, index) => {
+        sortedSceneGroups.map((group, index) => {
           const isFirstGroup = index === 0;
-          const isLastGroup = index === sceneGroups.length - 1;
+          const isLastGroup = index === sortedSceneGroups.length - 1;
 
           // Filter lyric lines that belong to this group
           const groupLines = lyricLines.filter((line) =>
@@ -134,8 +140,8 @@ export const VideoComposition = ({
       {outroConfig?.enabled && (() => {
         // Calculate outro start time (after last scene/group ends + transition buffer)
         // Add transition buffer so the last group's video has time to complete/fade
-        const lastEndTime = useGrouping && sceneGroups && sceneGroups.length > 0
-          ? sceneGroups[sceneGroups.length - 1].end
+        const lastEndTime = useGrouping && sortedSceneGroups && sortedSceneGroups.length > 0
+          ? sortedSceneGroups[sortedSceneGroups.length - 1].end
           : scenes[scenes.length - 1]?.end || 0;
 
         // Start outro after transition buffer to allow last scene to complete
@@ -147,8 +153,8 @@ export const VideoComposition = ({
         const mediaItems: { path: string; type: 'image' | 'video' }[] = [];
         const seenPaths = new Set<string>();
 
-        if (sceneGroups) {
-          for (const group of sceneGroups) {
+        if (sortedSceneGroups) {
+          for (const group of sortedSceneGroups) {
             if (group.imagePath && !group.isReusedGroup && !seenPaths.has(group.imagePath)) {
               // Determine media type from mediaVersions
               const activeVersion = group.mediaVersions?.find(v => v.id === group.activeMediaId);
