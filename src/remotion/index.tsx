@@ -31,9 +31,10 @@ export const RemotionRoot: React.FC = () => {
             durationInSeconds = lastScene?.end || 300;
           }
 
-          // Add outro duration if enabled
+          // Add outro duration if enabled (including transition buffer)
           if (props.outroConfig?.enabled) {
-            durationInSeconds += props.outroConfig.duration;
+            const transitionBuffer = 0.5; // Same as transitionDurationSeconds in VideoComposition
+            durationInSeconds += transitionBuffer + props.outroConfig.duration;
           }
 
           const durationInFrames = Math.floor(durationInSeconds * 30);

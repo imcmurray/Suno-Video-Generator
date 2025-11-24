@@ -46,6 +46,7 @@ export interface SceneGroup {
   displayMode?: 'cover' | 'contain' | 'contain-blur'; // How media is displayed in composition
   kenBurnsPreset?: 'static' | 'zoom-in' | 'zoom-out' | 'pan-left' | 'pan-right' | 'pan-up' | 'pan-down'; // Ken Burns animation preset
   coverVerticalPosition?: number; // Vertical position for cover mode (0-100%, 50 = center)
+  videoStartOffset?: number; // Start offset in seconds for video playback (0 = beginning)
 }
 
 // Legacy interface for backward compatibility
@@ -94,6 +95,7 @@ export interface VideoCompositionProps {
   useGrouping?: boolean; // Flag to use new grouping system
   outroConfig?: OutroConfig; // Outro/credits configuration
   songInfoConfig?: SongInfoConfig; // Song info overlay configuration
+  sunoStyleText?: string; // Fallback style text from metadata
 }
 
 export interface SceneProps {

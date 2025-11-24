@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { Monitor, Maximize2, Sparkles, Play, CheckCircle2, Film, Upload, X, Music } from "lucide-react";
+import { Monitor, Maximize2, Sparkles, Play, CheckCircle2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { Input } from "./ui/input";
-import { useProject, DEFAULT_OUTRO_CONFIG, DEFAULT_SONG_INFO_CONFIG } from "../lib/project-context";
+import { useProject } from "../lib/project-context";
 import { detectMediaOrientation, suggestDisplayMode, type MediaOrientation } from "../lib/media-utils";
-import { isValidBlobURL, createBlobURL, revokeBlobURL } from "../lib/blob-manager";
+import { isValidBlobURL } from "../lib/blob-manager";
 import { formatTime } from "../lib/utils";
 
 // Track logged messages to prevent console spam
@@ -50,7 +49,7 @@ const isValidMediaPath = (path: string | undefined): boolean => {
 };
 
 export const DisplayConfigEditor: React.FC = () => {
-  const { project, setProject, updateOutroConfig, updateSongInfoConfig } = useProject();
+  const { project, setProject } = useProject();
   const [detectionStatus, setDetectionStatus] = useState<Map<string, MediaOrientation>>(new Map());
   const [isDetecting, setIsDetecting] = useState(false);
   const hasRunDetection = useRef(false);
@@ -61,21 +60,24 @@ export const DisplayConfigEditor: React.FC = () => {
 
   // Memoize groups with valid media to prevent re-computation on every render
   // For reused groups, look up the original group's imagePath
+  // Sort by start time for correct timeline order
   const groupsWithMedia = useMemo(
-    () => project.sceneGroups?.map((group, index) => {
-      // For reused groups, get imagePath from original group
-      let effectiveImagePath = group.imagePath;
-      if (group.isReusedGroup && group.originalGroupId) {
-        const originalGroup = project.sceneGroups?.find(g => g.id === group.originalGroupId);
-        effectiveImagePath = originalGroup?.imagePath;
-      }
-      return {
-        group,
-        index,
-        hasValidMedia: isValidMediaPath(effectiveImagePath),
-        effectiveImagePath, // Resolved path for reused groups
-      };
-    }) || [],
+    () => [...(project.sceneGroups || [])]
+      .sort((a, b) => a.start - b.start)
+      .map((group, index) => {
+        // For reused groups, get imagePath from original group
+        let effectiveImagePath = group.imagePath;
+        if (group.isReusedGroup && group.originalGroupId) {
+          const originalGroup = project.sceneGroups?.find(g => g.id === group.originalGroupId);
+          effectiveImagePath = originalGroup?.imagePath;
+        }
+        return {
+          group,
+          index,
+          hasValidMedia: isValidMediaPath(effectiveImagePath),
+          effectiveImagePath, // Resolved path for reused groups
+        };
+      }),
     [project.sceneGroups]
   );
 
@@ -325,6 +327,22 @@ export const DisplayConfigEditor: React.FC = () => {
     setProject({ ...project, sceneGroups: updatedGroups });
   };
 
+  const handleVideoStartOffsetChange = (groupId: string, offset: number) => {
+    if (!project.sceneGroups) return;
+
+    const updatedGroups = project.sceneGroups.map((g) =>
+      g.id === groupId ? { ...g, videoStartOffset: offset } : g
+    );
+
+    setProject({ ...project, sceneGroups: updatedGroups });
+
+    // Update the video thumbnail to show the new start point
+    const videoElements = document.querySelectorAll(`video[data-group-id="${groupId}"]`);
+    videoElements.forEach((video) => {
+      (video as HTMLVideoElement).currentTime = offset;
+    });
+  };
+
   const applyToAll = (displayMode: 'cover' | 'contain-blur') => {
     if (!project.sceneGroups) return;
 
@@ -381,295 +399,6 @@ export const DisplayConfigEditor: React.FC = () => {
           <Button onClick={resetToDefaults} variant="outline">
             Reset All to Defaults
           </Button>
-        </CardContent>
-      </Card>
-
-      {/* Song Info Overlay Settings */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Music className="w-5 h-5" />
-            Song Info Overlay
-          </CardTitle>
-          <CardDescription>
-            Display song title, artist name, and style at the start of the video
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium">Enable Song Info</p>
-              <p className="text-sm text-muted-foreground">
-                Shows in top-left corner for first few seconds
-              </p>
-            </div>
-            <Button
-              variant={project.songInfoConfig?.enabled ? "default" : "outline"}
-              onClick={() => {
-                const currentConfig = project.songInfoConfig || DEFAULT_SONG_INFO_CONFIG;
-                updateSongInfoConfig({ enabled: !currentConfig.enabled });
-              }}
-            >
-              {project.songInfoConfig?.enabled ? "Enabled" : "Disabled"}
-            </Button>
-          </div>
-
-          {project.songInfoConfig?.enabled && (
-            <div className="pt-4 border-t space-y-4">
-              {/* Song Title */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Song Title</label>
-                <Input
-                  value={project.songInfoConfig?.songTitle || ""}
-                  onChange={(e) => updateSongInfoConfig({ songTitle: e.target.value })}
-                  placeholder="My Amazing Song"
-                />
-              </div>
-
-              {/* Artist Name */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Artist Name</label>
-                <Input
-                  value={project.songInfoConfig?.artistName || ""}
-                  onChange={(e) => updateSongInfoConfig({ artistName: e.target.value })}
-                  placeholder="ianux"
-                />
-              </div>
-
-              {/* Show Style Toggle */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">Show Style</p>
-                  <p className="text-xs text-muted-foreground">
-                    Display the Suno song style below artist name
-                  </p>
-                </div>
-                <Button
-                  variant={project.songInfoConfig?.showStyle ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => {
-                    const currentConfig = project.songInfoConfig || DEFAULT_SONG_INFO_CONFIG;
-                    updateSongInfoConfig({ showStyle: !currentConfig.showStyle });
-                  }}
-                >
-                  {project.songInfoConfig?.showStyle ? "Shown" : "Hidden"}
-                </Button>
-              </div>
-
-              {/* Style Text (only if showStyle is enabled) */}
-              {project.songInfoConfig?.showStyle && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Style</label>
-                  <Input
-                    value={project.songInfoConfig?.style || project.metadata?.sunoStyleText || ""}
-                    onChange={(e) => updateSongInfoConfig({ style: e.target.value })}
-                    placeholder="Melodic Pop, Upbeat, Electronic"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Auto-filled from Suno style file if available
-                  </p>
-                </div>
-              )}
-
-              {/* Display Duration */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Display Duration</label>
-                <Select
-                  value={String(project.songInfoConfig?.displayDuration || DEFAULT_SONG_INFO_CONFIG.displayDuration)}
-                  onValueChange={(value) => updateSongInfoConfig({ displayDuration: Number(value) })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="3">3 seconds</SelectItem>
-                    <SelectItem value="5">5 seconds</SelectItem>
-                    <SelectItem value="7">7 seconds</SelectItem>
-                    <SelectItem value="10">10 seconds</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Outro/Credits Settings */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Film className="w-5 h-5" />
-            Outro Credits Sequence
-          </CardTitle>
-          <CardDescription>
-            Add a credits sequence at the end showing all videos used, AI credits, and branding
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium">Enable Outro</p>
-              <p className="text-sm text-muted-foreground">
-                20-second credits sequence with ripple animation
-              </p>
-            </div>
-            <Button
-              variant={project.outroConfig?.enabled ? "default" : "outline"}
-              onClick={() => {
-                const currentConfig = project.outroConfig || DEFAULT_OUTRO_CONFIG;
-                updateOutroConfig({ enabled: !currentConfig.enabled });
-              }}
-            >
-              {project.outroConfig?.enabled ? "Enabled" : "Disabled"}
-            </Button>
-          </div>
-
-          {project.outroConfig?.enabled && (
-            <div className="pt-4 border-t space-y-4">
-              {/* App Name */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">App Name</label>
-                <Input
-                  value={project.outroConfig?.appName || DEFAULT_OUTRO_CONFIG.appName}
-                  onChange={(e) => updateOutroConfig({ appName: e.target.value })}
-                  placeholder="Suno Video Generator"
-                />
-              </div>
-
-              {/* GitHub URL */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">GitHub URL</label>
-                <Input
-                  value={project.outroConfig?.githubUrl || DEFAULT_OUTRO_CONFIG.githubUrl}
-                  onChange={(e) => updateOutroConfig({ githubUrl: e.target.value })}
-                  placeholder="github.com/username/repo"
-                />
-              </div>
-
-              {/* AI Credits */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">AI Credits Text</label>
-                <Input
-                  value={project.outroConfig?.aiCredits || DEFAULT_OUTRO_CONFIG.aiCredits}
-                  onChange={(e) => updateOutroConfig({ aiCredits: e.target.value })}
-                  placeholder="Videos by Grok • Music by Suno AI • Lyrics by Claude"
-                />
-                <p className="text-xs text-muted-foreground">Use • to separate credits</p>
-              </div>
-
-              {/* QR Codes Section */}
-              <div className="pt-4 border-t">
-                <p className="font-medium mb-3">QR Codes (appear in last 5 seconds)</p>
-                <div className="grid grid-cols-2 gap-4">
-                  {/* GitHub QR Code */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">GitHub QR Code</label>
-                    <div className="border-2 border-dashed rounded-lg p-4 text-center">
-                      {project.outroConfig?.githubQrImage ? (
-                        <div className="relative">
-                          <img
-                            src={project.outroConfig.githubQrImage}
-                            alt="GitHub QR"
-                            className="w-24 h-24 mx-auto object-contain"
-                          />
-                          <Button
-                            variant="destructive"
-                            size="icon"
-                            className="absolute top-0 right-0 w-6 h-6"
-                            onClick={() => {
-                              if (project.outroConfig?.githubQrImage) {
-                                revokeBlobURL(project.outroConfig.githubQrImage);
-                              }
-                              updateOutroConfig({ githubQrImage: undefined });
-                            }}
-                          >
-                            <X className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <label className="cursor-pointer">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                const url = createBlobURL(file, { versionLabel: 'qr-github' });
-                                updateOutroConfig({ githubQrImage: url });
-                              }
-                            }}
-                          />
-                          <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                          <p className="text-sm text-muted-foreground">Upload QR</p>
-                        </label>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Bitcoin QR Code */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Bitcoin QR Code</label>
-                    <div className="border-2 border-dashed rounded-lg p-4 text-center">
-                      {project.outroConfig?.bitcoinQrImage ? (
-                        <div className="relative">
-                          <img
-                            src={project.outroConfig.bitcoinQrImage}
-                            alt="Bitcoin QR"
-                            className="w-24 h-24 mx-auto object-contain"
-                          />
-                          <Button
-                            variant="destructive"
-                            size="icon"
-                            className="absolute top-0 right-0 w-6 h-6"
-                            onClick={() => {
-                              if (project.outroConfig?.bitcoinQrImage) {
-                                revokeBlobURL(project.outroConfig.bitcoinQrImage);
-                              }
-                              updateOutroConfig({ bitcoinQrImage: undefined });
-                            }}
-                          >
-                            <X className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <label className="cursor-pointer">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                const url = createBlobURL(file, { versionLabel: 'qr-bitcoin' });
-                                updateOutroConfig({ bitcoinQrImage: url });
-                              }
-                            }}
-                          />
-                          <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                          <p className="text-sm text-muted-foreground">Upload QR</p>
-                        </label>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Preview Summary */}
-              <div className="pt-4 border-t text-sm text-muted-foreground">
-                <p className="font-medium text-foreground mb-2">Outro Preview:</p>
-                <ul className="list-disc list-inside space-y-1">
-                  <li>Ripple animation of all video thumbnails</li>
-                  <li>AI credits: {project.outroConfig?.aiCredits || DEFAULT_OUTRO_CONFIG.aiCredits}</li>
-                  <li>App name: {project.outroConfig?.appName || DEFAULT_OUTRO_CONFIG.appName}</li>
-                  <li>GitHub: {project.outroConfig?.githubUrl || DEFAULT_OUTRO_CONFIG.githubUrl}</li>
-                  {(project.outroConfig?.githubQrImage || project.outroConfig?.bitcoinQrImage) && (
-                    <li>QR codes appear in last 5 seconds</li>
-                  )}
-                </ul>
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -757,6 +486,7 @@ export const DisplayConfigEditor: React.FC = () => {
                     <video
                       key={`${group.id}-blur`}
                       src={mediaPath}
+                      data-group-id={group.id}
                       className="absolute w-full h-full"
                       style={{
                         objectFit: 'cover',
@@ -769,6 +499,11 @@ export const DisplayConfigEditor: React.FC = () => {
                       preload="metadata"
                       autoPlay={false}
                       loop={false}
+                      onLoadedMetadata={(e) => {
+                        if (group.videoStartOffset) {
+                          e.currentTarget.currentTime = group.videoStartOffset;
+                        }
+                      }}
                     />
                   ) : (
                     <img
@@ -791,6 +526,7 @@ export const DisplayConfigEditor: React.FC = () => {
                     <video
                       key={group.id}
                       src={mediaPath}
+                      data-group-id={group.id}
                       className="relative w-full h-full"
                       style={{ objectFit: 'contain' }}
                       muted
@@ -798,6 +534,11 @@ export const DisplayConfigEditor: React.FC = () => {
                       preload="metadata"
                       autoPlay={false}
                       loop={false}
+                      onLoadedMetadata={(e) => {
+                        if (group.videoStartOffset) {
+                          e.currentTarget.currentTime = group.videoStartOffset;
+                        }
+                      }}
                       onError={(e) => {
                         logOnce(`thumbnail-video-error-${group.id}`, () => {
                           console.log(`[Thumbnail] ❌ Video error for Group ${index + 1}`);
@@ -836,6 +577,7 @@ export const DisplayConfigEditor: React.FC = () => {
                     <video
                       key={group.id}
                       src={mediaPath}
+                      data-group-id={group.id}
                       className="w-full h-full"
                       style={{ objectFit, objectPosition }}
                       muted
@@ -843,6 +585,11 @@ export const DisplayConfigEditor: React.FC = () => {
                       preload="metadata"
                       autoPlay={false}
                       loop={false}
+                      onLoadedMetadata={(e) => {
+                        if (group.videoStartOffset) {
+                          e.currentTarget.currentTime = group.videoStartOffset;
+                        }
+                      }}
                       onError={(e) => {
                         logOnce(`thumbnail-video-error-${group.id}`, () => {
                           console.log(`[Thumbnail] ❌ Video error for Group ${index + 1}`);
@@ -988,6 +735,38 @@ export const DisplayConfigEditor: React.FC = () => {
                     {formatTime(group.start)} - {formatTime(group.end)} ({group.duration.toFixed(1)}s)
                   </div>
                 </div>
+
+                {/* Video Start Offset Slider - only show for videos longer than group duration */}
+                {(() => {
+                  // Get the active video version to check duration
+                  const activeVersion = group.mediaVersions?.find(v => v.id === group.activeMediaId);
+                  const isVideo = activeVersion?.type === 'video';
+                  const videoDuration = activeVersion?.duration || 0;
+                  const maxOffset = videoDuration - group.duration;
+
+                  // Only show slider if it's a video and it's longer than the group needs
+                  if (isVideo && maxOffset > 0.1) {
+                    return (
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Video Start Point</label>
+                        <input
+                          type="range"
+                          min={0}
+                          max={maxOffset}
+                          step={0.1}
+                          value={group.videoStartOffset || 0}
+                          onChange={(e) => handleVideoStartOffsetChange(group.id, parseFloat(e.target.value))}
+                          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                        />
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Start: {formatTime(group.videoStartOffset || 0)}</span>
+                          <span>Video: {videoDuration.toFixed(1)}s → Using {group.duration.toFixed(1)}s</span>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
 
                 {/* Status Indicators */}
                 {group.isReusedGroup && (

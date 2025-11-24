@@ -136,9 +136,10 @@ export const VideoPreview: React.FC = () => {
         : 60)
     : (project.scenes[project.scenes.length - 1]?.end || 60);
 
-  // Add outro duration if enabled
+  // Add outro duration if enabled (including transition buffer before outro)
   if (project.outroConfig?.enabled) {
-    totalDurationSeconds += project.outroConfig.duration;
+    const transitionBuffer = 0.5; // Same as transitionDurationSeconds in VideoComposition
+    totalDurationSeconds += transitionBuffer + project.outroConfig.duration;
   }
 
   const durationInFrames = Math.floor(totalDurationSeconds * fps);
@@ -151,6 +152,7 @@ export const VideoPreview: React.FC = () => {
     useGrouping: project.useGrouping,
     outroConfig: project.outroConfig,
     songInfoConfig: project.songInfoConfig,
+    sunoStyleText: project.metadata?.sunoStyleText,
   };
 
   // Show loading message while audio is being prefetched
@@ -236,6 +238,7 @@ export const VideoPreview: React.FC = () => {
           displayMode: group.displayMode,
           kenBurnsPreset: group.kenBurnsPreset,
           coverVerticalPosition: group.coverVerticalPosition,
+          videoStartOffset: group.videoStartOffset,
         }));
 
         formData.append("sceneGroups", JSON.stringify(sceneGroupsForBackend));

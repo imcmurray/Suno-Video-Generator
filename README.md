@@ -15,6 +15,8 @@ Transform your Suno AI-generated songs into professional HD music videos with AI
 - **🎬 Outro/Credits Sequence** - Auto-generated credits with video showcase and AI attribution
 - **🔄 Video Looping** - Scene group videos loop seamlessly in final renders
 - **🧠 AI Enhanced Prompts** - Precision visual translator for symbolic, lyric-based imagery
+- **🎭 Song Info Overlay** - Animated song title, artist, and style with staggered slide-in effects
+- **💾 Complete Project Export/Import** - Save and restore entire projects with all settings preserved
 
 ## 🚀 Quick Start
 
@@ -60,14 +62,22 @@ Configure AI settings:
 - Enter your API key
 - Set base visual style (e.g., "photorealistic, cinematic")
 
-### 2. Edit Prompts
+### 2. Scene Grouping
+
+Organize your lyrics into scene groups:
+- Automatic grouping based on time gaps
+- Merge consecutive lines for multi-line scenes
+- Instrumental breaks automatically detected and positioned chronologically
+
+### 3. Edit Prompts
 
 Review and customize AI image prompts for each scene:
 - Click any scene to expand and edit
 - Modify prompts to fine-tune visual output
 - See extracted style elements and mood
+- AI Enhanced prompt regeneration per scene
 
-### 3. Generate Images
+### 4. Generate Images
 
 Queue-based image generation with progress tracking:
 - Start/pause generation at any time
@@ -75,7 +85,21 @@ Queue-based image generation with progress tracking:
 - Retry failed generations
 - Resume from where you left off
 
-### 4. Preview & Render
+### 5. Display Configuration
+
+Configure visual settings for each scene:
+- Assign images or videos to scene groups
+- Configure Ken Burns effects
+- Set lyric overlay styling and positioning
+
+### 6. Intro & Outro
+
+Configure overlay animations:
+- **Song Info Overlay** - Title, artist, and style with staggered slide-in animation
+- **Outro/Credits** - Video showcase grid with QR codes and custom text
+- Toggle each feature on/off independently
+
+### 7. Preview & Render
 
 Interactive Remotion Player:
 - Preview full video with timeline scrubbing
@@ -91,16 +115,22 @@ suno-video-generator/
 │   ├── components/          # React UI components
 │   │   ├── ui/             # Shadcn/ui components
 │   │   ├── ProjectSetup.tsx
+│   │   ├── SceneGroupingEditor.tsx
 │   │   ├── PromptEditor.tsx
 │   │   ├── ImageGeneration.tsx
+│   │   ├── DisplayConfigEditor.tsx
+│   │   ├── IntroOutroEditor.tsx
 │   │   └── VideoPreview.tsx
 │   ├── remotion/           # Remotion video components
 │   │   ├── VideoComposition.tsx
-│   │   └── Scene.tsx       # With Ken Burns effects
+│   │   ├── Scene.tsx       # With Ken Burns effects
+│   │   ├── SongInfoOverlay.tsx
+│   │   └── Outro.tsx
 │   ├── lib/                # Core logic
 │   │   ├── srt-parser.ts
 │   │   ├── image-api.ts
 │   │   ├── project-context.tsx
+│   │   ├── project-storage.ts
 │   │   └── utils.ts
 │   ├── types/              # TypeScript definitions
 │   ├── App.tsx             # Main application
@@ -159,6 +189,17 @@ Handles special Suno subtitle conventions:
 - `(background vocals)` - Kept in captions, excluded from image prompts
 - `[Intro]`, `[Instrumental]` - Triggers abstract visuals
 
+### Song Info Overlay
+
+Displays song metadata at the start of your video with smooth animations:
+
+- **Staggered Slide-In** - Title, artist, and style slide in sequentially from left
+- **Configurable Timing** - Set display duration (default 5 seconds)
+- **Synchronized Fade-Out** - All elements fade out together
+- **Style Fallback** - Uses Suno style prompt if no custom style text provided
+- **Position Control** - Configurable left/bottom offset positioning
+- **Toggleable** - Enable/disable in Intro & Outro settings
+
 ### Outro/Credits Sequence
 
 Automatically generates a professional credits sequence at the end of your video:
@@ -190,6 +231,17 @@ The AI prompt enhancement system uses a precision visual translator framework:
 - **Surreal/Abstract Focus** - Creates unique, evocative imagery tied to specific lyrics
 - **Progressive UI** - AI Enhanced tags appear in real-time as batches complete
 - **Per-Scene Regeneration** - Regenerate individual AI Enhanced prompts with a single click
+
+### Complete Project Export/Import
+
+Save and restore entire projects for later editing:
+
+- **Full State Preservation** - All settings, prompts, and configurations saved
+- **Media Files Included** - Audio, images, videos, and QR codes bundled in ZIP
+- **SRT & Style Files** - Lyrics and Suno style prompt preserved
+- **Chronological Ordering** - Scene groups maintain correct time-based order
+- **Cross-Session Support** - Import projects in new browser sessions
+- **Versioned Manifest** - Future-proof export format
 
 ## 📊 Cost Estimation
 

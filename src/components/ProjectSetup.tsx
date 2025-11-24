@@ -262,7 +262,7 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
     try {
       // Load complete project ZIP
       setLoadingStatus("Loading complete project...");
-      const { project: importedData, audioFile } = await importCompleteProject(files.completeProject);
+      const { project: importedData, audioFile, srtFile, sunoStyleFile } = await importCompleteProject(files.completeProject);
 
       // Validate structure
       if (!importedData.metadata || !importedData.scenes) {
@@ -279,7 +279,8 @@ export const ProjectSetup: React.FC<{ onComplete: () => void }> = ({ onComplete 
         sceneGroups: importedData.sceneGroups,
         useGrouping: importedData.useGrouping,
         audioFile: audioFile, // Audio from ZIP
-        srtFile: files.completeProject, // Use ZIP file as placeholder
+        srtFile: srtFile, // Restored SRT file from ZIP
+        sunoStyleFile: sunoStyleFile, // Restored style file from ZIP
         apiProvider: apiProvider, // User can override
         apiKey, // User must provide API key
         imageGenerationProgress: importedData.imageGenerationProgress || {

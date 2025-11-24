@@ -948,8 +948,8 @@ export const ImageGeneration: React.FC<{ onNext: () => void }> = ({ onNext }) =>
       {/* Status Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         {usingGrouping && project.sceneGroups ? (
-          // Render group statuses
-          project.sceneGroups.map((group, index) => {
+          // Render group statuses - sorted by start time for correct timeline order
+          [...project.sceneGroups].sort((a, b) => a.start - b.start).map((group, index) => {
             const status = statuses.get(group.id);
             if (!status) return null;
 

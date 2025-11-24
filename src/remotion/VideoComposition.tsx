@@ -13,6 +13,7 @@ export const VideoComposition = ({
   useGrouping,
   outroConfig,
   songInfoConfig,
+  sunoStyleText,
 }: VideoCompositionProps) => {
   const { fps } = useVideoConfig();
 
@@ -71,10 +72,9 @@ export const VideoComposition = ({
             durationInFrames += transitionDurationFrames;
           }
 
-          // Extend duration at the end (overlap with next group)
-          if (!isLastGroup) {
-            durationInFrames += transitionDurationFrames;
-          }
+          // Extend duration at the end (overlap with next group, or fade-out time for last group)
+          // Last group also needs this extension so it can properly fade out before outro
+          durationInFrames += transitionDurationFrames;
 
           return (
             <Sequence
@@ -110,10 +110,9 @@ export const VideoComposition = ({
             durationInFrames += transitionDurationFrames;
           }
 
-          // Extend duration at the end (overlap with next scene)
-          if (!isLastScene) {
-            durationInFrames += transitionDurationFrames;
-          }
+          // Extend duration at the end (overlap with next scene, or fade-out time for last scene)
+          // Last scene also needs this extension so it can properly fade out before outro
+          durationInFrames += transitionDurationFrames;
 
           return (
             <Sequence
@@ -133,12 +132,14 @@ export const VideoComposition = ({
 
       {/* Outro/Credits Sequence */}
       {outroConfig?.enabled && (() => {
-        // Calculate outro start time (after last scene/group ends)
+        // Calculate outro start time (after last scene/group ends + transition buffer)
+        // Add transition buffer so the last group's video has time to complete/fade
         const lastEndTime = useGrouping && sceneGroups && sceneGroups.length > 0
           ? sceneGroups[sceneGroups.length - 1].end
           : scenes[scenes.length - 1]?.end || 0;
 
-        const outroStartFrame = secondsToFrames(lastEndTime);
+        // Start outro after transition buffer to allow last scene to complete
+        const outroStartFrame = secondsToFrames(lastEndTime + transitionDurationSeconds);
         const outroDurationFrames = secondsToFrames(outroConfig.duration);
 
         // Collect unique VIDEO items from scene groups (excluding reused groups)
@@ -201,7 +202,7 @@ export const VideoComposition = ({
             songTitle={songInfoConfig.songTitle}
             artistName={songInfoConfig.artistName}
             showStyle={songInfoConfig.showStyle}
-            style={songInfoConfig.style}
+            style={songInfoConfig.style || sunoStyleText || ''}
             displayDuration={songInfoConfig.displayDuration}
           />
         </Sequence>

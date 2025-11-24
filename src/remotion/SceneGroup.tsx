@@ -219,6 +219,7 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
                       src={sceneGroup.imagePath}
                       muted={true}
                       playbackRate={playbackRate}
+                      startFrom={sceneGroup.videoStartOffset || 0}
                       delayRenderTimeoutInMilliseconds={60000}
                       style={{
                         position: "absolute",
@@ -237,6 +238,7 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
                     src={sceneGroup.imagePath}
                     muted={true}
                     playbackRate={playbackRate}
+                    startFrom={sceneGroup.videoStartOffset || 0}
                     delayRenderTimeoutInMilliseconds={60000}
                     style={{
                       position: "absolute",
@@ -274,6 +276,7 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
                       src={sceneGroup.imagePath}
                       muted={true}
                       playbackRate={playbackRate}
+                      startFrom={sceneGroup.videoStartOffset || 0}
                       delayRenderTimeoutInMilliseconds={60000}
                       style={{
                         position: "relative",
@@ -290,6 +293,7 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
                     src={sceneGroup.imagePath}
                     muted={true}
                     playbackRate={playbackRate}
+                    startFrom={sceneGroup.videoStartOffset || 0}
                     delayRenderTimeoutInMilliseconds={60000}
                     style={{
                       position: "relative",
@@ -325,6 +329,7 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
                       src={sceneGroup.imagePath}
                       muted={true}
                       playbackRate={playbackRate}
+                      startFrom={sceneGroup.videoStartOffset || 0}
                       delayRenderTimeoutInMilliseconds={60000}
                       style={{
                         width: "100%",
@@ -342,6 +347,7 @@ export const SceneGroup: React.FC<SceneGroupProps> = ({
                     src={sceneGroup.imagePath}
                     muted={true}
                     playbackRate={playbackRate}
+                    startFrom={sceneGroup.videoStartOffset || 0}
                     delayRenderTimeoutInMilliseconds={60000}
                     style={{
                       width: "100%",

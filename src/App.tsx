@@ -6,24 +6,25 @@ import { SceneGroupingEditor } from "./components/SceneGroupingEditor";
 import { PromptEditor } from "./components/PromptEditor";
 import { ImageGeneration } from "./components/ImageGeneration";
 import { DisplayConfigEditor } from "./components/DisplayConfigEditor";
+import { IntroOutroEditor } from "./components/IntroOutroEditor";
 import { VideoPreview } from "./components/VideoPreview";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import "./styles/globals.css";
 
-type AppStep = "setup" | "grouping" | "edit" | "generate" | "configure" | "preview";
+type AppStep = "setup" | "grouping" | "edit" | "generate" | "configure" | "overlays" | "preview";
 
 const App: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<AppStep>("setup");
 
   const getStepNumber = (step: AppStep): number => {
-    const steps: AppStep[] = ["setup", "grouping", "edit", "generate", "configure", "preview"];
+    const steps: AppStep[] = ["setup", "grouping", "edit", "generate", "configure", "overlays", "preview"];
     return steps.indexOf(step) + 1;
   };
 
   // Log step changes
   React.useEffect(() => {
-    console.log(`[App] 📍 Current Step: ${currentStep} (${getStepNumber(currentStep)}/6)`);
+    console.log(`[App] 📍 Current Step: ${currentStep} (${getStepNumber(currentStep)}/7)`);
   }, [currentStep]);
 
   const renderStep = () => {
@@ -44,6 +45,8 @@ const App: React.FC = () => {
         return <ImageGeneration onNext={() => setCurrentStep("configure")} />;
       case "configure":
         return <DisplayConfigEditor />;
+      case "overlays":
+        return <IntroOutroEditor />;
       case "preview":
         return <VideoPreview />;
       default:
@@ -91,9 +94,13 @@ const App: React.FC = () => {
                       <span className="hidden sm:inline">5. Configure Display</span>
                       <span className="sm:hidden">5</span>
                     </TabsTrigger>
-                    <TabsTrigger value="preview">
-                      <span className="hidden sm:inline">6. Preview & Render</span>
+                    <TabsTrigger value="overlays">
+                      <span className="hidden sm:inline">6. Intro & Outro</span>
                       <span className="sm:hidden">6</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="preview">
+                      <span className="hidden sm:inline">7. Preview & Render</span>
+                      <span className="sm:hidden">7</span>
                     </TabsTrigger>
                   </TabsList>
                 </Tabs>

@@ -218,8 +218,9 @@ export const SceneGroupingEditor: React.FC<SceneGroupingEditorProps> = ({
   const handleContinue = () => {
     if (!project) return;
 
-    // Merge gap groups with scene groups for saving
-    const allGroups = [...sceneGroups, ...gapGroups];
+    // Merge gap groups with scene groups and sort by start time
+    // This ensures instrumental breaks appear in their correct timeline position
+    const allGroups = [...sceneGroups, ...gapGroups].sort((a, b) => a.start - b.start);
 
     // Save grouping data to project
     setProject({

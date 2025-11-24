@@ -19,7 +19,7 @@ export async function saveProject(project: ProjectState): Promise<void> {
     lyricLines: project.lyricLines,
     useGrouping: project.useGrouping,
     sceneGroups: project.sceneGroups?.map((group) => ({
-      ...group, // Preserves displayMode, kenBurnsPreset, coverVerticalPosition
+      ...group, // Preserves displayMode, kenBurnsPreset, coverVerticalPosition, videoStartOffset
       // Don't save blob URLs, they won't work after reload
       imagePath: group.imagePath?.startsWith("blob:") ? undefined : group.imagePath,
       // Save mediaVersions with file references (no blob URLs)
@@ -80,7 +80,7 @@ export async function exportImages(project: ProjectState): Promise<void> {
             // Add to ZIP
             zip.file(filename, blob);
 
-            // Add to manifest
+            // Add to manifest (including fps and duration for videos)
             groupManifest.mediaVersions.push({
               filename,
               id: version.id,
@@ -89,6 +89,8 @@ export async function exportImages(project: ProjectState): Promise<void> {
               quality: version.quality,
               createdAt: version.createdAt,
               exported: version.exported,
+              fps: version.fps,
+              duration: version.duration,
             });
           } catch (error) {
             console.error(`Failed to add media ${version.label} for group ${group.id}:`, error);
@@ -228,7 +230,7 @@ export async function loadProject(file: File): Promise<Partial<ProjectState>> {
  */
 export async function exportCompleteProject(project: ProjectState): Promise<void> {
   const zip = new JSZip();
-  const manifest: any = { groups: {} };
+  const manifest: any = { version: 1, groups: {} };
 
   // 1. Add project.json with updated media paths
   const projectData = {
@@ -236,8 +238,9 @@ export async function exportCompleteProject(project: ProjectState): Promise<void
     scenes: project.scenes,
     lyricLines: project.lyricLines,
     useGrouping: project.useGrouping,
-    sceneGroups: project.sceneGroups?.map((group) => ({
-      ...group, // Preserves displayMode, kenBurnsPreset, coverVerticalPosition
+    // Sort groups by start time for consistent chronological order
+    sceneGroups: [...(project.sceneGroups || [])].sort((a, b) => a.start - b.start).map((group) => ({
+      ...group, // Preserves displayMode, kenBurnsPreset, coverVerticalPosition, videoStartOffset
       imagePath: undefined, // Will be restored from manifest
       mediaVersions: group.mediaVersions?.map((version) => ({
         ...version,
@@ -265,6 +268,18 @@ export async function exportCompleteProject(project: ProjectState): Promise<void
     manifest.audioFilename = `audio.${audioExtension}`;
   }
 
+  // 2b. Add SRT file if available
+  if (project.srtFile) {
+    zip.file("lyrics.srt", project.srtFile);
+    manifest.srtFilename = "lyrics.srt";
+  }
+
+  // 2c. Add Suno style file if available
+  if (project.sunoStyleFile) {
+    zip.file("style.txt", project.sunoStyleFile);
+    manifest.styleFilename = "style.txt";
+  }
+
   // 3. Add all media files
   if (project.sceneGroups && project.sceneGroups.length > 0) {
     const mediaPromises = project.sceneGroups
@@ -287,7 +302,7 @@ export async function exportCompleteProject(project: ProjectState): Promise<void
             // Add to ZIP in media folder
             zip.file(`media/${filename}`, blob);
 
-            // Add to manifest
+            // Add to manifest (including fps and duration for videos)
             groupManifest.mediaVersions.push({
               filename,
               id: version.id,
@@ -296,6 +311,8 @@ export async function exportCompleteProject(project: ProjectState): Promise<void
               quality: version.quality,
               createdAt: version.createdAt,
               exported: version.exported,
+              fps: version.fps,
+              duration: version.duration,
             });
           } catch (error) {
             console.error(`Failed to add media ${version.label} for group ${group.id}:`, error);
@@ -347,7 +364,7 @@ export async function exportCompleteProject(project: ProjectState): Promise<void
  */
 export async function importCompleteProject(
   file: File
-): Promise<{ project: Partial<ProjectState>; audioFile: File }> {
+): Promise<{ project: Partial<ProjectState>; audioFile: File; srtFile?: File; sunoStyleFile?: File }> {
   const zip = await JSZip.loadAsync(file);
 
   // 1. Load project.json
@@ -375,8 +392,42 @@ export async function importCompleteProject(
     throw new Error("Invalid complete project file - missing audio file");
   }
 
+  // Detect audio MIME type from extension
+  const audioExtension = audioFilename.split('.').pop()?.toLowerCase() || 'wav';
+  const audioMimeTypes: Record<string, string> = {
+    'mp3': 'audio/mpeg',
+    'wav': 'audio/wav',
+    'ogg': 'audio/ogg',
+    'flac': 'audio/flac',
+    'm4a': 'audio/mp4',
+    'aac': 'audio/aac',
+  };
+  const audioMimeType = audioMimeTypes[audioExtension] || 'audio/wav';
+
   const audioBlob = await audioFile.async("blob");
-  const audioFileObj = new File([audioBlob], audioFilename, { type: "audio/wav" });
+  const audioFileObj = new File([audioBlob], audioFilename, { type: audioMimeType });
+
+  // 3b. Load SRT file if present
+  let srtFileObj: File | undefined;
+  if (manifest.srtFilename) {
+    const srtFile = zip.file(manifest.srtFilename);
+    if (srtFile) {
+      const srtBlob = await srtFile.async("blob");
+      srtFileObj = new File([srtBlob], manifest.srtFilename, { type: "text/plain" });
+      console.log("[importCompleteProject] Restored SRT file");
+    }
+  }
+
+  // 3c. Load Suno style file if present
+  let styleFileObj: File | undefined;
+  if (manifest.styleFilename) {
+    const styleFile = zip.file(manifest.styleFilename);
+    if (styleFile) {
+      const styleBlob = await styleFile.async("blob");
+      styleFileObj = new File([styleBlob], manifest.styleFilename, { type: "text/plain" });
+      console.log("[importCompleteProject] Restored Suno style file");
+    }
+  }
 
   // 4. Load QR code images if present in manifest
   let githubQrImage: string | undefined;
@@ -421,7 +472,7 @@ export async function importCompleteProject(
     }).filter((v: any) => v !== null);
 
     return {
-      ...group, // Preserves displayMode, kenBurnsPreset, coverVerticalPosition
+      ...group, // Preserves displayMode, kenBurnsPreset, coverVerticalPosition, videoStartOffset
       mediaVersions,
       activeMediaId: groupManifest.activeMediaId,
     };
@@ -441,8 +492,11 @@ export async function importCompleteProject(
             version.path = createBlobURL(blob, { groupId: group.id, versionLabel: version.label });
             delete version.zipFile; // Clean up
 
-            // Detect FPS and duration for videos if not already present
+            // Use saved FPS and duration from manifest, or detect if not present
             if (version.type === 'video') {
+              const hadSavedFps = !!version.fps;
+              const hadSavedDuration = !!version.duration;
+
               try {
                 const [detectedFPS, detectedDuration] = await Promise.all([
                   !version.fps ? detectVideoFPS(version.path) : Promise.resolve(version.fps),
@@ -450,7 +504,7 @@ export async function importCompleteProject(
                 ]);
                 version.fps = detectedFPS ?? undefined;
                 version.duration = detectedDuration ?? undefined;
-                console.log(`[importCompleteProject] Detected video metadata for ${version.label}: FPS=${version.fps || 'default'}, Duration=${version.duration || 'unknown'}s`);
+                console.log(`[importCompleteProject] Video metadata for ${version.label}: FPS=${version.fps || 'default'}${hadSavedFps ? ' (restored)' : ' (detected)'}, Duration=${version.duration || 'unknown'}s${hadSavedDuration ? ' (restored)' : ' (detected)'}`);
               } catch (error) {
                 console.warn(`[importCompleteProject] Failed to detect video metadata for ${version.label}:`, error);
               }
@@ -473,13 +527,18 @@ export async function importCompleteProject(
     bitcoinQrImage,
   } : undefined;
 
+  // Sort groups by start time for consistent chronological order
+  const sortedSceneGroups = sceneGroups?.sort((a: any, b: any) => a.start - b.start);
+
   return {
     project: {
       ...projectData,
-      sceneGroups,
+      sceneGroups: sortedSceneGroups,
       outroConfig: restoredOutroConfig,
       songInfoConfig: projectData.songInfoConfig, // Restore song info config (no binary files to handle)
     },
     audioFile: audioFileObj,
+    srtFile: srtFileObj,
+    sunoStyleFile: styleFileObj,
   };
 }

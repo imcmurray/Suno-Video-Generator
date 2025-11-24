@@ -787,8 +787,8 @@ export const PromptEditor: React.FC<{ onNext: () => void }> = ({ onNext }) => {
       {/* Scene/Group List */}
       <div className="space-y-3 mb-6">
         {usingGrouping ? (
-          // Render Scene Groups
-          project.sceneGroups!.map((group, index) => (
+          // Render Scene Groups - sorted by start time for correct timeline order
+          [...project.sceneGroups!].sort((a, b) => a.start - b.start).map((group, index) => (
             <SceneGroupEditor
               key={group.id}
               group={group}
