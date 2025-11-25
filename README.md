@@ -371,6 +371,32 @@ MIT License - Free for personal and commercial use
 - **Tailwind CSS** - Utility-first CSS framework
 - **Suno AI** - Music generation platform
 
+## 🔒 Security
+
+This project has undergone security review with the following protections implemented:
+
+### Implemented Security Measures
+
+| Protection | Description |
+|------------|-------------|
+| **File Type Validation** | Strict whitelist of allowed MIME types and extensions (audio, video, images only) |
+| **Input Validation** | Zod schemas validate all JSON request data |
+| **Path Traversal Protection** | Download endpoint validates file paths are within allowed directories |
+| **Error Sanitization** | Generic error messages to clients, detailed logs server-side only |
+| **File Cleanup** | Uploaded files cleaned up on error to prevent orphaned files |
+| **Dependency Security** | npm audit vulnerabilities addressed |
+
+### Production Deployment Notes
+
+The following security features are **deferred for localhost-only usage** but should be enabled before production:
+
+- **Authentication** - Add API key or JWT authentication
+- **Rate Limiting** - Install `express-rate-limit` to prevent DoS
+- **Security Headers** - Install `helmet` for security headers
+- **CORS Configuration** - Configure environment-based allowed origins
+
+For full details, see the [Security Review Report](./security-review-2025-11-24.md).
+
 ## 💬 Support
 
 Issues or questions? Check the `.claude` file for detailed architecture documentation.

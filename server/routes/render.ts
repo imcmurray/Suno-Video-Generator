@@ -4,6 +4,131 @@ import { renderQueue, RenderJobInput } from "../render-queue";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
+import { z } from "zod";
+
+// ============================================================================
+// FILE TYPE VALIDATION - Strict whitelist for security
+// ============================================================================
+const ALLOWED_AUDIO_MIMES = ['audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/x-wav', 'audio/wave'];
+const ALLOWED_VIDEO_MIMES = ['video/mp4', 'video/quicktime', 'video/webm'];
+const ALLOWED_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const ALLOWED_MIMES = [...ALLOWED_AUDIO_MIMES, ...ALLOWED_VIDEO_MIMES, ...ALLOWED_IMAGE_MIMES];
+const ALLOWED_EXTENSIONS = new Set(['.wav', '.mp3', '.mp4', '.mov', '.webm', '.jpg', '.jpeg', '.png', '.webp', '.gif']);
+
+const fileFilter: multer.Options['fileFilter'] = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  const isAllowedMime = ALLOWED_MIMES.includes(file.mimetype);
+  const isAllowedExt = ALLOWED_EXTENSIONS.has(ext);
+
+  if (isAllowedMime && isAllowedExt) {
+    cb(null, true);
+  } else {
+    console.warn(`File rejected: ${file.originalname} (mime: ${file.mimetype}, ext: ${ext})`);
+    cb(new Error(`Invalid file type. Allowed: audio (wav, mp3), video (mp4, mov, webm), images (jpg, png, webp, gif)`));
+  }
+};
+
+// ============================================================================
+// ZOD SCHEMAS - Input validation for request data
+// ============================================================================
+const MediaVersionSchema = z.object({
+  id: z.string(),
+  path: z.string(),
+  type: z.enum(['image', 'video']),
+  isActive: z.boolean(),
+  duration: z.number().optional(),
+});
+
+const SceneGroupSchema = z.object({
+  id: z.string(),
+  name: z.string().optional(),
+  start: z.number(),
+  end: z.number(),
+  duration: z.number(),
+  imagePath: z.string().optional(),
+  mediaVersions: z.array(MediaVersionSchema).optional(),
+  mediaFileKey: z.string().optional(),
+  activeMediaId: z.string().optional(),
+  isReusedGroup: z.boolean().optional(),
+  originalGroupId: z.string().optional(),
+  displayMode: z.string().optional(),
+  kenBurnsPreset: z.string().optional(),
+  coverVerticalPosition: z.number().optional(),
+}).passthrough(); // Allow additional fields
+
+const LyricLineSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  start: z.number(),
+  end: z.number(),
+  groupId: z.string().optional(),
+}).passthrough();
+
+const SceneSchema = z.object({
+  lyric: z.string().optional(),
+  start: z.number(),
+  end: z.number(),
+  imagePath: z.string().optional(),
+}).passthrough();
+
+const OutroConfigSchema = z.object({
+  enabled: z.boolean(),
+  duration: z.number(),
+  appName: z.string(),
+  githubUrl: z.string(),
+  aiCredits: z.string().optional(),
+  githubQrImage: z.string().optional(),
+  bitcoinQrImage: z.string().optional(),
+  githubQrFileKey: z.string().optional(),
+  bitcoinQrFileKey: z.string().optional(),
+}).passthrough();
+
+const SongInfoConfigSchema = z.object({
+  enabled: z.boolean(),
+  songTitle: z.string(),
+  artistName: z.string(),
+  showStyle: z.boolean(),
+  style: z.string(),
+  displayDuration: z.number(),
+}).passthrough();
+
+// Helper function for safe JSON parsing with Zod validation
+function safeParseJson<T>(json: string | undefined, schema: z.ZodType<T>, fieldName: string): T | undefined {
+  if (!json) return undefined;
+  try {
+    const parsed = JSON.parse(json);
+    return schema.parse(parsed);
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      const firstError = e.errors[0];
+      throw new Error(`Invalid ${fieldName}: ${firstError?.path.join('.')} - ${firstError?.message}`);
+    }
+    if (e instanceof SyntaxError) {
+      throw new Error(`Invalid ${fieldName}: malformed JSON`);
+    }
+    throw e;
+  }
+}
+
+// ============================================================================
+// FILE CLEANUP HELPER - Clean up uploaded files on error
+// ============================================================================
+const cleanupUploadedFiles = (files: Express.Multer.File[] | undefined) => {
+  if (!files) return;
+  for (const file of files) {
+    try {
+      if (fs.existsSync(file.path)) {
+        fs.unlinkSync(file.path);
+        console.log(`Cleaned up uploaded file: ${file.path}`);
+      }
+    } catch (e) {
+      console.error(`Failed to cleanup file ${file.path}:`, e);
+    }
+  }
+};
+
+// Output directory for path traversal protection
+const OUTPUT_DIR = path.resolve(__dirname, '../output');
 
 const router = Router();
 
@@ -11,9 +136,9 @@ const router = Router();
 const storage = multer.diskStorage({
   destination: path.join(__dirname, "../uploads"),
   filename: (req, file, cb) => {
-    // Extract extension from original filename
-    const ext = path.extname(file.originalname);
-    // Generate random filename + preserve extension
+    // Extract and sanitize extension (force lowercase for consistency)
+    const ext = path.extname(file.originalname).toLowerCase();
+    // Generate random filename + preserve sanitized extension
     const randomName = crypto.randomBytes(16).toString('hex');
     cb(null, `${randomName}${ext}`);
   }
@@ -21,6 +146,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage: storage,
+  fileFilter: fileFilter, // Strict file type validation
   limits: {
     fileSize: 100 * 1024 * 1024, // 100MB max
   },
@@ -44,6 +170,7 @@ router.post("/render", upload.any(), async (req: Request, res: Response) => {
     // Find audio file
     const audioFile = files.find(f => f.fieldname === "audioFile");
     if (!audioFile) {
+      cleanupUploadedFiles(files);
       return res.status(400).json({
         error: "Missing audio file",
       });
@@ -61,9 +188,14 @@ router.post("/render", upload.any(), async (req: Request, res: Response) => {
     let inputProps: any;
 
     if (useGrouping === "true" && sceneGroups) {
-      // Grouping mode: process scene groups
-      const parsedGroups = JSON.parse(sceneGroups);
-      const parsedLines = JSON.parse(lyricLines);
+      // Grouping mode: process scene groups with Zod validation
+      const parsedGroups = safeParseJson(sceneGroups, z.array(SceneGroupSchema), 'sceneGroups');
+      const parsedLines = safeParseJson(lyricLines, z.array(LyricLineSchema), 'lyricLines');
+
+      if (!parsedGroups || !parsedLines) {
+        cleanupUploadedFiles(files);
+        return res.status(400).json({ error: "Missing required fields: sceneGroups and lyricLines" });
+      }
 
       console.log(`Processing ${parsedGroups.length} scene groups for render`);
 
@@ -138,7 +270,7 @@ router.post("/render", upload.any(), async (req: Request, res: Response) => {
       }
 
       // Parse outro config if provided and map QR image file keys to URLs
-      let parsedOutroConfig = outroConfig ? JSON.parse(outroConfig) : undefined;
+      let parsedOutroConfig = safeParseJson(outroConfig, OutroConfigSchema, 'outroConfig');
       if (parsedOutroConfig) {
         console.log('[Render] Received outroConfig:', JSON.stringify(parsedOutroConfig));
         console.log('[Render] Available file keys:', Array.from(fileUrlMap.keys()));
@@ -175,8 +307,8 @@ router.post("/render", upload.any(), async (req: Request, res: Response) => {
         });
       }
 
-      // Parse song info config (simple JSON, no file handling needed)
-      const parsedSongInfoConfig = songInfoConfig ? JSON.parse(songInfoConfig) : undefined;
+      // Parse song info config with Zod validation
+      const parsedSongInfoConfig = safeParseJson(songInfoConfig, SongInfoConfigSchema, 'songInfoConfig');
       if (parsedSongInfoConfig) {
         console.log('[Render] Received songInfoConfig:', JSON.stringify(parsedSongInfoConfig));
       }
@@ -191,9 +323,9 @@ router.post("/render", upload.any(), async (req: Request, res: Response) => {
         songInfoConfig: parsedSongInfoConfig,
       };
     } else {
-      // Legacy mode: process scenes
-      const parsedScenes = JSON.parse(scenes || "[]");
-      let parsedOutroConfig = outroConfig ? JSON.parse(outroConfig) : undefined;
+      // Legacy mode: process scenes with Zod validation
+      const parsedScenes = safeParseJson(scenes, z.array(SceneSchema), 'scenes') || [];
+      let parsedOutroConfig = safeParseJson(outroConfig, OutroConfigSchema, 'outroConfig');
 
       // Map QR image file keys to URLs (same as grouping mode)
       if (parsedOutroConfig) {
@@ -209,8 +341,8 @@ router.post("/render", upload.any(), async (req: Request, res: Response) => {
         }
       }
 
-      // Parse song info config for legacy mode too
-      const parsedSongInfoConfig = songInfoConfig ? JSON.parse(songInfoConfig) : undefined;
+      // Parse song info config for legacy mode with Zod validation
+      const parsedSongInfoConfig = safeParseJson(songInfoConfig, SongInfoConfigSchema, 'songInfoConfig');
 
       inputProps = {
         scenes: parsedScenes,
@@ -220,7 +352,7 @@ router.post("/render", upload.any(), async (req: Request, res: Response) => {
       };
     }
 
-    const parsedMetadata = metadata ? JSON.parse(metadata) : {};
+    const parsedMetadata = safeParseJson(metadata, z.record(z.unknown()), 'metadata') || {};
 
     const input: RenderJobInput = {
       audioPath: inputProps.audioPath,
@@ -244,9 +376,20 @@ router.post("/render", upload.any(), async (req: Request, res: Response) => {
       message: "Render job created successfully",
     });
   } catch (error) {
+    // Log full error server-side for debugging
     console.error("Error creating render job:", error);
-    res.status(500).json({
-      error: error instanceof Error ? error.message : "Failed to create render job",
+
+    // Clean up uploaded files on error
+    const files = req.files as Express.Multer.File[] | undefined;
+    cleanupUploadedFiles(files);
+
+    // Return sanitized error message to client (don't leak internal details)
+    // Only expose validation errors, not stack traces or system info
+    const isValidationError = error instanceof Error &&
+      (error.message.startsWith('Invalid ') || error.message.includes('file type'));
+
+    res.status(isValidationError ? 400 : 500).json({
+      error: isValidationError ? error.message : "Failed to create render job",
     });
   }
 });
@@ -293,6 +436,15 @@ router.get("/render/:id/download", (req: Request, res: Response) => {
     return res.status(400).json({
       error: "Video not ready for download",
       status: job.status,
+    });
+  }
+
+  // Path traversal protection: ensure outputPath is within allowed directory
+  const resolvedPath = path.resolve(job.outputPath);
+  if (!resolvedPath.startsWith(OUTPUT_DIR + path.sep) && resolvedPath !== OUTPUT_DIR) {
+    console.error(`Path traversal attempt blocked: ${job.outputPath} -> ${resolvedPath}`);
+    return res.status(403).json({
+      error: "Access denied",
     });
   }
 
